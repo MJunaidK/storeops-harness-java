@@ -1,0 +1,82 @@
+# ---------------------------------------------------------------
+# Maven
+# ---------------------------------------------------------------
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+# Keep the Maven wrapper jar so ./mvnw works out of the box
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---------------------------------------------------------------
+# Java
+# ---------------------------------------------------------------
+*.class
+*.log
+*.ctxt
+hs_err_pid*
+replay_pid*
+.mtj.tmp/
+
+# ---------------------------------------------------------------
+# Spring Boot
+# ---------------------------------------------------------------
+# Local overrides / secrets (commit application.yml, not these)
+application-local.yml
+application-local.yaml
+application-local.properties
+.env
+.env.*
+!.env.example
+*.pid
+logs/
+spring-shell.log
+
+# ---------------------------------------------------------------
+# IntelliJ IDEA
+# ---------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+atlassian-ide-plugin.xml
+
+# ---------------------------------------------------------------
+# VS Code (Java extension pack / Eclipse JDT LS)
+# ---------------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.history/
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+
+# ---------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+# ---------------------------------------------------------------
+# Harness
+# ---------------------------------------------------------------
+# Scratch output from Generator/Evaluator runs — not committed
+.harness/output/
+# NOTE: .harness/reviews/ is the committed audit trail — do NOT ignore it
