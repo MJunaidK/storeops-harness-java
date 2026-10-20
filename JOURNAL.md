@@ -32,7 +32,13 @@
 
 ### D5 · 2026-10-18 — Domain events live in shared.event
 
-[your existing entry — unchanged, it's good]
+- **Decision:** ...(original)
+- **Alternatives:** ...(original)
+- **Rationale:** ...(original)
+- **Assumption:** ...(original)
+- **Known trade-off (found 2026-10-18, alerts review):** Event status is a String, so AlertService
+  compares against "BLOCKED". Renaming the TaskStatus enum would still compile while escalations
+  silently stop. Possible mitigation: a contract test, or shared status constants.
 
 ## Observations & corrections log
 
@@ -63,3 +69,13 @@
 - No status transition rules (DONE → TODO allowed).
 - Events are synchronous: an alerts listener failure fails the request after the task is saved.
 - `Instant.now()` hard-coded; no injectable Clock → time-based tests (SLA) are hard.
+
+### D5 · 2026-10-18 — Domain events live in shared.event
+
+- **Decision:** ...(original)
+- **Alternatives:** ...(original)
+- **Rationale:** ...(original)
+- **Assumption:** ...(original)
+- **Known trade-off (found 2026-10-18, alerts review):** Event status is a String, so AlertService
+  compares against "BLOCKED". Renaming the TaskStatus enum would still compile while escalations
+  silently stop. Possible mitigation: a contract test, or shared status constants.
