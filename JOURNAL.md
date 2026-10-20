@@ -81,5 +81,6 @@
 
 - A: `throw new IllegalStateException` in `ActivityService.get` → `verify` FAILED on ArchUnit rule 4. ✅
 - B: `AlertService` method taking `activities.repository.TaskRepository` → `verify` FAILED on ArchUnit rule 1. ✅
-- C: `if (false) { throw new IllegalStateException(...); }` in `ActivityService.get` → [TO DO: run ArchitectureTest and record whether it passed or failed]
+- C: `if (false) { throw new IllegalStateException("x"); }` in `ActivityService.get` → `ArchitectureTest` PASSED — the gate did NOT catch it. javac removes the dead block, so ArchUnit (bytecode analysis) never sees it.
+  → Possible fix: add a source-level check (e.g. Checkstyle regex or Evaluator text search for `new (IllegalState|IllegalArgument|Runtime)Exception` in service/controller files), plus an LLM-review checklist item for dead or suspicious code.
 - Lesson: automated gates check compiled structure only. Dead code is removed by the compiler, and test _quality_ (failure mode #3) is invisible to tools → the Evaluator needs an LLM review with a strict checklist alongside the hard gates.
