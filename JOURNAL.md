@@ -32,13 +32,11 @@
 
 ### D5 · 2026-10-18 — Domain events live in shared.event
 
-- **Decision:** ...(original)
-- **Alternatives:** ...(original)
-- **Rationale:** ...(original)
-- **Assumption:** ...(original)
-- **Known trade-off (found 2026-10-18, alerts review):** Event status is a String, so AlertService
-  compares against "BLOCKED". Renaming the TaskStatus enum would still compile while escalations
-  silently stop. Possible mitigation: a contract test, or shared status constants.
+- **Decision:** `TaskCreatedEvent` and `TaskStatusChangedEvent` (plus `DomainEvent` and `EventBus`) live in `com.storeops.shared.event`; payloads use primitives/Strings (status as its enum name), not activities model types.
+- **Alternatives:** An `activities.event` package that alerts reads directly.
+- **Rationale:** Alerts would then import `activities.*`, adding a module dependency edge one refactor away from a cycle and weakening the "notifications via event bus only" boundary. With shared events, activities and alerts have no compile-time dependency on each other.
+- **Assumption:** Event payloads stay small and stable enough that ids and names are sufficient for alert creation.
+- **Known trade-off (found 2026-10-18, alerts review):** Status travels as a String, so AlertService compares against "BLOCKED". Renaming the TaskStatus enum would still compile while escalations silently stop. Mitigation: contract test or shared status constants.
 
 ## Observations & corrections log
 
@@ -50,9 +48,9 @@
 ### 2026-10-18 — Generation result
 
 - `mvnw verify` green: 65 tests, 6 ArchUnit rules, 0 SpotBugs bugs, JaCoCo thresholds met with no exclusions.
-- Gate sabotage test: [what you broke → did verify fail? which rule?]
 - Docker daemon unreachable (old Docker Toolbox env vars) → deferred to deploy phase.
 - Dockerfile build skips Checkstyle/SpotBugs/JaCoCo; gates run in `mvnw verify`. → Input for CLAUDE.md CI/CD note.
+- Added `.gitattributes`: `mvnw` must keep LF line endings or it breaks on Linux/Docker.
 
 ### 2026-10-18 — Choices Claude made where the spec was silent
 
@@ -70,12 +68,18 @@
 - Events are synchronous: an alerts listener failure fails the request after the task is saved.
 - `Instant.now()` hard-coded; no injectable Clock → time-based tests (SLA) are hard.
 
-### D5 · 2026-10-18 — Domain events live in shared.event
+### 2026-10-18 — Alerts module review: baseline gaps
 
-- **Decision:** ...(original)
-- **Alternatives:** ...(original)
-- **Rationale:** ...(original)
-- **Assumption:** ...(original)
-- **Known trade-off (found 2026-10-18, alerts review):** Event status is a String, so AlertService
-  compares against "BLOCKED". Renaming the TaskStatus enum would still compile while escalations
-  silently stop. Possible mitigation: a contract test, or shared status constants.
+- New-task alerts typed SHIFT_HANDOVER — no fitting AlertType exists (spec gap).
+- BLOCKED → "ESCALATION" only notifies owner/assignee, never a STORE_MANAGER.
+- Magic string "BLOCKED" — see D5 trade-off.
+- Users are notified about their own actions.
+- No mark-as-read; EMAIL channel unused.
+- Synchronous listener: failure fails the PATCH after the task is saved; retries could duplicate alerts.
+
+### 2026-10-19 — Gate sabotage tests
+
+- A: `throw new IllegalStateException` in `ActivityService.get` → `verify` FAILED on ArchUnit rule 4. ✅
+- B: `AlertService` method taking `activities.repository.TaskRepository` → `verify` FAILED on ArchUnit rule 1. ✅
+- C: `if (false) { throw new IllegalStateException(...); }` in `ActivityService.get` → [TO DO: run ArchitectureTest and record whether it passed or failed]
+- Lesson: automated gates check compiled structure only. Dead code is removed by the compiler, and test _quality_ (failure mode #3) is invisible to tools → the Evaluator needs an LLM review with a strict checklist alongside the hard gates.
