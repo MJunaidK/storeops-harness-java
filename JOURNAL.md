@@ -94,3 +94,18 @@
 - addMember is not thread-safe: read-check-save race can silently lose a member.
 - Creator is recorded (createdBy) but not automatically added as a member.
 - Key insight: programmes IS store-scoped, activities is NOT — the prompt specified store scope only for programmes. The Generator built exactly what was specified, nothing more → the Planner's acceptance criteria must state scope rules explicitly.
+
+### 2026-10-20 — Staff module review: baseline gaps
+
+- **Missing Region Concept**: Regions are currently treated like normal stores (e.g., Rita the regional manager has `storeId = "region-1"`), and there is no way to link which stores belong to which region. A regional rollup feature cannot be built until this relationship is defined.
+- **Single Store Limitation**: The app currently only seeds one store (`store-1`) for every user. Because of this, store isolation in activities cannot be tested, and any cross-store bugs are completely hidden.
+- **Disconnected Departments**: Departments are only stored in the `UserProfile`, while tasks have no department field. This makes it impossible to calculate metrics like "overdue counts by department" or run `DEPARTMENT_PERFORMANCE` reports.
+- **Dead Auth Code**: `AuthToken` and `tokenFor()` are never used. The app relies on a header stub for authentication, and since tokens aren't stored, they cannot be validated.
+- **Confusing Error Codes**: Invalid references (such as creating a task for a non-existent assignee) trigger a `404 Not Found` error via `requireById` instead of a clearer `400 Bad Request`, making it look like the endpoint itself is missing.
+
+### 2026-10-20 — Reports module review: baseline gaps
+
+- **Mixed Scoping in Reports**: The report mixes data from different scopes—programmes and staff are correctly counted for the user's specific store, but tasks are fetched globally via `activityService.list(null, null)` from all stores. This causes a store summary to display one store's staff alongside every store's tasks. One missing rule upstream (activities scoping) produced wrong numbers downstream. Gaps propagate across modules.
+- **Ignored Report Type Parameter**: The report type parameter is completely ignored, meaning `STORE_SUMMARY`, `REGIONAL_ROLLUP`, and `DEPARTMENT_PERFORMANCE` all return the exact same metrics.
+- **Hardcoded Status**: Report statuses are always set to `READY`, as `PENDING` and `FAILED` are never used because reports are generated instantly within the same request.
+- **Unenforced "Read-Only" Logic**: "Read-only" is currently just a convention rather than an enforced rule. Because rule 6 allows service dependencies, a report could theoretically call mutating methods on `ActivityService` without an ArchUnit rule catching it, demonstrating why tool checks alone aren't enough (reference in Evaluator's checklist and Design Brief Section C).
