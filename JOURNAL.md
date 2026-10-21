@@ -84,3 +84,13 @@
 - C: `if (false) { throw new IllegalStateException("x"); }` in `ActivityService.get` → `ArchitectureTest` PASSED — the gate did NOT catch it. javac removes the dead block, so ArchUnit (bytecode analysis) never sees it.
   → Possible fix: add a source-level check (e.g. Checkstyle regex or Evaluator text search for `new (IllegalState|IllegalArgument|Runtime)Exception` in service/controller files), plus an LLM-review checklist item for dead or suspicious code.
 - Lesson: automated gates check compiled structure only. Dead code is removed by the compiler, and test _quality_ (failure mode #3) is invisible to tools → the Evaluator needs an LLM review with a strict checklist alongside the hard gates.
+
+### 2026-10-19 — Programmes module review: baseline gaps
+
+- No permission checks: any associate can create a programme and add members.
+- Two unconnected role systems: StaffRole (job) vs ProjectRole (programme role) — an ASSOCIATE can be added as programme STORE_MANAGER.
+- Name mismatch: module is "programmes" but classes are Project/ProjectMember/ProjectRole (inherited from the PDF) → skill files must state the mapping.
+- Project has no status/lifecycle and emits no events — yet the spec expects "programme closes → STORE_SUMMARY report".
+- addMember is not thread-safe: read-check-save race can silently lose a member.
+- Creator is recorded (createdBy) but not automatically added as a member.
+- Key insight: programmes IS store-scoped, activities is NOT — the prompt specified store scope only for programmes. The Generator built exactly what was specified, nothing more → the Planner's acceptance criteria must state scope rules explicitly.
