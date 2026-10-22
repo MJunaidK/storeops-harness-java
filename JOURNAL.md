@@ -38,6 +38,38 @@
 - **Assumption:** Event payloads stay small and stable enough that ids and names are sufficient for alert creation.
 - **Known trade-off (found 2026-10-18, alerts review):** Status travels as a String, so AlertService compares against "BLOCKED". Renaming the TaskStatus enum would still compile while escalations silently stop. Mitigation: contract test or shared status constants.
 
+### D6 · 2026-10-21 — Hard-gate command is `./mvnw verify`, not `mvn test`
+
+- **Decision:** All gates run via `./mvnw verify` using the Maven wrapper.
+- **Alternatives:** `mvn test` (PDF's generic Java command).
+- **Rationale:** `test` skips JaCoCo thresholds and SpotBugs (bound to verify); the wrapper pins the Maven version across laptop, Docker, CI and the harness.
+- **Assumption:** The verify phase stays fast enough for up to 3 Evaluator iterations per sprint.
+
+### D7 · 2026-10-22 — Hard-gate command is `./mvnw verify`, not `mvn test`
+
+- **Decision:** add a rule that reports may not call methods named create*/update*/delete*/add* on other services
+- **Alternatives:** Document them as known blind spots in the skill file and cover them with the LLM checklist.
+- **Rationale:** it’s the core of failure mode #2 and the fix is small.
+
+### D7 · 2026-10-22 — ArchUnit rule 7: reports may not call write methods on other modules' services
+
+- **Decision:** Add ArchUnit rule 7: classes in reports must not call methods named create*/update*/delete*/add*/remove*/save* on other modules' service classes.
+- **Alternatives:** Leave rule 6 as is and rely only on the Evaluator's LLM checklist for "read-only reports".
+- **Rationale:** Sabotage test D proved rule 6 lets `activityService.delete(...)` through; create/update are blocked only by accident (they need a DTO). A deterministic gate beats an LLM judgment for a rule this clear-cut.
+- **Assumption:** Write methods on services follow the naming convention. A write method with another name (e.g. `assign`, `close`) would bypass the rule → coding-conventions must require these prefixes, and the LLM checklist keeps a "reports is read-only" item as backup.
+
+### D8 · 2026-10-22 — Harden ArchUnit rule 4 from blacklist to whitelist
+
+- **Decision:** Controllers and services may construct only Throwables that are subclasses of `AppError`
+  (rule renamed `CONTROLLERS_AND_SERVICES_CONSTRUCT_ONLY_APP_ERRORS`).
+- **Alternatives:** Keep the blacklist of 4 types (RuntimeException, IllegalArgumentException,
+  IllegalStateException, Exception) and catch other exceptions via the LLM checklist.
+- **Rationale:** The blacklist let `UnsupportedOperationException`, `NoSuchElementException` and home-made
+  `extends RuntimeException` classes through. Rule 4 is the core gate for failure mode #2, so it should
+  forbid everything except the allowed types, not list a few forbidden ones.
+- **Assumption:** Scope stays controller + service packages (matches the spec). Raw exceptions in model,
+  repository or dto classes, and dead code removed by javac (sabotage C), remain LLM-review items.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
@@ -109,3 +141,23 @@
 - **Ignored Report Type Parameter**: The report type parameter is completely ignored, meaning `STORE_SUMMARY`, `REGIONAL_ROLLUP`, and `DEPARTMENT_PERFORMANCE` all return the exact same metrics.
 - **Hardcoded Status**: Report statuses are always set to `READY`, as `PENDING` and `FAILED` are never used because reports are generated instantly within the same request.
 - **Unenforced "Read-Only" Logic**: "Read-only" is currently just a convention rather than an enforced rule. Because rule 6 allows service dependencies, a report could theoretically call mutating methods on `ActivityService` without an ArchUnit rule catching it, demonstrating why tool checks alone aren't enough (reference in Evaluator's checklist and Design Brief Section C).
+
+### 2026-10-21 — app-context first draft
+
+- First draft contained invented class names (Activity, Programme, Staff), wrong endpoint claims
+  (staff/reports), and a dependency table that contradicted the code.
+- Lesson: a skill file with wrong facts is worse than none — agents trust it. Every name, path and
+  endpoint in a skill file must be verified against the code.
+- → Evaluator idea: a check that class names referenced in skill files actually exist in src/.
+
+### 2026-10-22 — Gate sabotage tests (rule 6)
+
+- D: `activityService.delete(caller, id)` in `ReportService` → `ArchitectureTest` PASSED — gate did NOT catch it.
+- E: `activityService.update(id, new UpdateTaskRequest(null, null, null, null))` in `ReportService` → FAILED on ArchUnit rule 6. ✅
+- Lesson: ArchUnit checks which types/packages are used, not which methods are called. create/update are blocked only because they need a DTO (forbidden package); delete needs none → "read-only reports" is not enforced by rule 6. → D7.
+
+### 2026-10-22 — Gate sabotage tests (rule 6)
+
+- D: `activityService.delete(caller, id)` in `ReportService` → `ArchitectureTest` PASSED — gate did NOT catch it.
+- E: `activityService.update(id, new UpdateTaskRequest(null, null, null, null))` in `ReportService` → FAILED on ArchUnit rule 6. ✅
+- Lesson: ArchUnit checks which types/packages are used, not which methods are called. create/update are blocked only because they need a DTO (forbidden package); delete needs none → "read-only reports" is not enforced by rule 6. → D7.

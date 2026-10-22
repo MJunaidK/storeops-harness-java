@@ -5,10 +5,12 @@ import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyP
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.storeops.shared.error.AppError;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaConstructorCall;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -16,7 +18,6 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.library.dependencies.SliceAssignment;
 import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 import java.util.List;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,11 +26,9 @@ class ArchitectureTest {
 
     private static final List<String> MODULES = List.of("activities", "programmes", "staff", "alerts", "reports");
     private static final Pattern MODULE_PACKAGE = Pattern.compile("com\\.storeops\\.(activities|programmes|staff|alerts|reports)\\..*");
-    private static final Set<String> FORBIDDEN_EXCEPTIONS = Set.of(
-        "java.lang.RuntimeException",
-        "java.lang.IllegalArgumentException",
-        "java.lang.IllegalStateException",
-        "java.lang.Exception");
+    private static final Pattern OTHER_MODULE_SERVICE_PACKAGE =
+        Pattern.compile("com\\.storeops\\.(activities|programmes|staff|alerts)\\.service");
+    private static final Pattern WRITE_METHOD_NAME = Pattern.compile("(create|update|delete|add|remove|save).*");
 
     /** Rule 1: nothing outside module X may access com.storeops.X.repository. */
     @ArchTest
@@ -51,12 +50,15 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule MODULES_ARE_FREE_OF_CYCLES = slices().assignedFrom(moduleSlices()).should().beFreeOfCycles();
 
-    /** Rule 4: controllers and services throw only AppError subclasses. */
+    /**
+     * Rule 4 (hardened, D8): controllers and services may construct only Throwables that are AppError subclasses.
+     * Whitelist instead of the former blacklist of four exception types.
+     */
     @ArchTest
-    static final ArchRule NO_GENERIC_EXCEPTIONS_IN_CONTROLLERS_AND_SERVICES = noClasses()
+    static final ArchRule CONTROLLERS_AND_SERVICES_CONSTRUCT_ONLY_APP_ERRORS = noClasses()
         .that().resideInAnyPackage("..controller..", "..service..")
-        .should().callConstructorWhere(constructsForbiddenException())
-        .because("only AppError subclasses may be thrown");
+        .should().callConstructorWhere(constructsThrowableThatIsNotAppError())
+        .because("only AppError subclasses may be thrown (failure mode #2)");
 
     /** Rule 5. */
     @ArchTest
@@ -73,6 +75,13 @@ class ArchitectureTest {
                 "com.storeops.alerts..")
                 .and(not(resideInAnyPackage("..service..", "..model.."))));
 
+    /** Rule 7 (D7): reports never calls write methods on other modules' services. */
+    @ArchTest
+    static final ArchRule REPORTS_NEVER_CALL_WRITE_METHODS_ON_OTHER_SERVICES = noClasses()
+        .that().resideInAPackage("com.storeops.reports..")
+        .should().callMethodWhere(callsWriteMethodOnOtherModuleService())
+        .because("reports is read-only; write methods are named create*/update*/delete*/add*/remove*/save*");
+
     private static SliceAssignment moduleSlices() {
         return new SliceAssignment() {
             @Override
@@ -88,11 +97,23 @@ class ArchitectureTest {
         };
     }
 
-    private static DescribedPredicate<JavaConstructorCall> constructsForbiddenException() {
-        return new DescribedPredicate<>("construct RuntimeException, IllegalArgumentException, IllegalStateException or Exception") {
+    private static DescribedPredicate<JavaConstructorCall> constructsThrowableThatIsNotAppError() {
+        return new DescribedPredicate<>("construct a Throwable that is not an AppError subclass") {
             @Override
             public boolean test(JavaConstructorCall call) {
-                return FORBIDDEN_EXCEPTIONS.contains(call.getTargetOwner().getFullName());
+                JavaClass target = call.getTargetOwner();
+                return target.isAssignableTo(Throwable.class) && !target.isAssignableTo(AppError.class);
+            }
+        };
+    }
+
+    private static DescribedPredicate<JavaMethodCall> callsWriteMethodOnOtherModuleService() {
+        return new DescribedPredicate<>("call a create/update/delete/add/remove/save method on another module's service") {
+            @Override
+            public boolean test(JavaMethodCall call) {
+                boolean otherModuleService =
+                    OTHER_MODULE_SERVICE_PACKAGE.matcher(call.getTargetOwner().getPackageName()).matches();
+                return otherModuleService && WRITE_METHOD_NAME.matcher(call.getName()).matches();
             }
         };
     }
