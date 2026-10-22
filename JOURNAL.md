@@ -156,8 +156,7 @@
 - E: `activityService.update(id, new UpdateTaskRequest(null, null, null, null))` in `ReportService` → FAILED on ArchUnit rule 6. ✅
 - Lesson: ArchUnit checks which types/packages are used, not which methods are called. create/update are blocked only because they need a DTO (forbidden package); delete needs none → "read-only reports" is not enforced by rule 6. → D7.
 
-### 2026-10-22 — Gate sabotage tests (rule 6)
+### 2026-10-22 — Hardened gates verified
 
-- D: `activityService.delete(caller, id)` in `ReportService` → `ArchitectureTest` PASSED — gate did NOT catch it.
-- E: `activityService.update(id, new UpdateTaskRequest(null, null, null, null))` in `ReportService` → FAILED on ArchUnit rule 6. ✅
-- Lesson: ArchUnit checks which types/packages are used, not which methods are called. create/update are blocked only because they need a DTO (forbidden package); delete needs none → "read-only reports" is not enforced by rule 6. → D7.
+- F before hardening: `UnsupportedOperationException` in ActivityService → PASSED (blacklist gap confirmed).
+- After D7/D8: D → FAILED on rule 7 ✅; F → FAILED on rule 4 ✅. `./mvnw verify` green on baseline.
