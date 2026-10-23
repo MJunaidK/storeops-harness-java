@@ -7,128 +7,125 @@ description: The non-negotiable StoreOps architecture rules, why each exists, ho
 
 ## Purpose
 
+The five architecture rules from the assignment spec (§3.5), encoded for StoreOps. Every rule traces to a client failure mode. Planner: write acceptance criteria that respect them. Generator: never violate them. Evaluator: check each one using the stated method; a hard-gate failure is always a FAIL.
+
+Two numbering systems are used below: **R1–R5** = architecture rules (this file). **A1–A7** = ArchUnit tests in `src/test/java/com/storeops/ArchitectureTest.java`. Always cite an A-rule by its name too; the name is what a failing build prints.
+
 ## Hard gate
 
-(./mvnw verify exit 0; what it runs; ./mvnw test is not enough)
+`./mvnw verify` must exit 0. It runs, in order: Checkstyle → compile → unit, MockMvc and ArchUnit tests (A1–A7) → JaCoCo thresholds (service ≥ 80% line, controller ≥ 70%, shared ≥ 60%, overall ≥ 70%) → SpotBugs (high priority).
+`./mvnw test` is NOT sufficient: it skips JaCoCo and SpotBugs. (D6)
+
+## Traceability
+
+| Rule                 | Failure mode | Hard gate (ArchUnit)                                                                                                         | LLM-assessed                                                 |
+| -------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| R1 Module boundary   | #1           | A1 `repositoriesAreOnlyAccessedFromTheirOwnModule`, A3 `MODULES_ARE_FREE_OF_CYCLES`                                          | cycles via `shared`                                          |
+| R2 Event bus only    | #4           | A5 `ACTIVITIES_AND_PROGRAMMES_DO_NOT_DEPEND_ON_ALERTS_OR_REPORTS` (partial)                                                  | all cross-module writes                                      |
+| R3 Error contract    | #2           | A4 `CONTROLLERS_AND_SERVICES_CONSTRUCT_ONLY_APP_ERRORS`                                                                      | dead code; raw exceptions outside controller/service         |
+| R4 Layer separation  | —            | A2 `CONTROLLERS_NEVER_ACCESS_REPOSITORIES`                                                                                   | logic in controllers; HTTP or external calls in repositories |
+| R5 Read-only reports | —            | A6 `REPORTS_DEPEND_ON_OTHER_MODULES_ONLY_THROUGH_SERVICE_AND_MODEL`, A7 `REPORTS_NEVER_CALL_WRITE_METHODS_ON_OTHER_SERVICES` | write methods without a write prefix                         |
+| Test quality         | #3           | JaCoCo thresholds (quantity only)                                                                                            | assertions on business rules (see `how-to-test`)             |
 
 ## Rules
 
 ### R1 · Module boundary (failure mode #1)
 
-**Rule:** All modules must respect their boundaries; no direct access to internal classes of other modules.
+**Rule:** No module accesses another module's `repository` package. Cross-module reads go through the target module's **service** (spec §3.5). Using another module's `model` types returned by its service is allowed. No dependency cycles between modules.
 
-**Why:** Violating module boundaries creates tight coupling, making the system harder to maintain and evolve.
+**Why:** A repository is a module's private storage. Reaching into it bypasses that module's rules (validation, store scoping) and couples modules to storage details.
 
 **Correct:**
-import com.storeops.activities.model.Task; // public API
+User member = staffService.requireById(request.userId()); // programmes reads staff via its service
 **Violation:**
-import com.storeops.activities.repository.TaskRepository; // internal class
-**Mapping:** internal classes are only accessible within the same module.
-**Checked by:** ArchUnit rule 1 (`./mvnw verify`) — HARD GATE.
+private final TaskRepository taskRepository; // in AlertService — reaching into activities
+
+**Checked by:** A1 and A3 — HARD GATE. A1 verified by sabotage test B (2026-10-19).
+**Blind spot:** A3 ignores `shared`, and `shared.security` depends on `staff`; a cycle routed through `shared` is not detected → Evaluator checks new imports of `shared` from `staff`.
 
 ### R2 · Event bus only (failure mode #4)
 
-**Rule:** All inter-module communication must go through the event bus; no direct method calls between modules.
+**Rule:** Reads across modules = direct call to the other module's service, read methods only (`get*`, `find*`, `list*`, `require*`). Side effects across modules (create, change, notify) = `eventBus.emit(...)`; the owning module reacts in its own service with `@EventListener`. Never import or call `AlertService` or `ReportService` from another module. (D9)
 
-**Why:** Direct calls create tight coupling and make it harder to evolve modules independently.
+**Why:** Direct cross-module writes couple modules: every new reaction to a task would mean editing activities. With events, a new listener is added and the emitting module stays unchanged.
 
 **Correct:**
 eventBus.emit(new TaskCreatedEvent(saved.id(), saved.title(), saved.ownerId(), saved.assigneeId(), now));
 **Violation:**
-otherModuleService.someMethod(); // direct call
+alertService.notify(task.assigneeId(), ...); // activities calling alerts directly
+activityService.create(caller, request); // programmes writing into activities
 
-**Mapping:** all cross-module interactions must be via events.
-**Checked by:** ArchUnit rule 2 (`./mvnw verify`) — HARD GATE.
+**Events:** defined in `com.storeops.shared.event`, implement `DomainEvent`, carry ids and primitive values only, never another module's model types (D5). Status travels as its enum name (String); listeners comparing it must use the enum name, and a test must cover the comparison.
 
-### R3 · Error contract (prevents failure mode #2)
+**Checked by:** A5 — HARD GATE, partial: covers only activities/programmes → alerts/reports.
+**Blind spot:** A write from any other direction (e.g. programmes → `ActivityService.create`, alerts → activities) is not detected → Evaluator must check every new cross-module service call is a read method.
 
-**Rule:** Services and controllers throw only `AppError` subclasses from `com.storeops.shared.error`.
-Never construct `RuntimeException`, `IllegalArgumentException`, `IllegalStateException` or `Exception`.
+### R3 · Error contract (failure mode #2)
 
-**Why:** Raw exceptions bypass `GlobalExceptionHandler`, so clients get a 500 with no `{"code","message"}`
-body instead of the intended 400/403/404/409.
+**Rule:** Controllers and services construct only `AppError` subclasses from `com.storeops.shared.error`. Any other `Throwable` (`RuntimeException`, `IllegalArgumentException`, `UnsupportedOperationException`, a home-made `extends RuntimeException`, …) is forbidden. (D8)
+
+**Why:** Non-`AppError` exceptions bypass `GlobalExceptionHandler`'s mapping, so clients get a 500 instead of the intended status and `{"code","message"}` body.
 
 **Correct:**
 return taskRepository.findById(id).orElseThrow(() -> new NotFoundError("Task not found: " + id));
 **Violation:**
 return taskRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("not found"));
 
-**Mapping:** missing → NotFoundError 404 · invalid input/reference → ValidationError 400 ·
-no permission → ForbiddenError 403 · duplicate → ConflictError 409 · no/unknown caller → UnauthorizedError 401.
-Need a new kind? Add a subclass of AppError in shared.error — never a raw exception.
+**Mapping:** missing → `NotFoundError` 404 · invalid input or reference → `ValidationError` 400 · no permission → `ForbiddenError` 403 · duplicate → `ConflictError` 409 · no or unknown caller → `UnauthorizedError` 401. A new kind of error = a new `AppError` subclass in `shared.error`, never a raw exception.
 
-**Checked by:** ArchUnit rule 4 (`./mvnw verify`) — HARD GATE.
-**Blind spot:** ArchUnit reads compiled bytecode; dead code (`if (false) throw …`) is removed by javac
-and not detected (verified 2026-10-19, sabotage test C). Evaluator must also scan the diff source.
+**Checked by:** A4 (whitelist) — HARD GATE. Verified by sabotage tests A and F.
+**Blind spots:** (1) A4 reads bytecode; dead code such as `if (false) throw …` is removed by javac and not seen (sabotage test C) → Evaluator scans the diff source. (2) A4 covers controller and service packages only → raw exceptions in model, repository or dto classes are an LLM check.
 
 ### R4 · Layer separation
 
-**Rule:** Each layer (e.g., controller, service, repository) must only interact with the layer directly below it; no skipping layers.
+**Rule:** Controller → Service → Repository, no skipping. Controllers only map HTTP to one service call (resolve caller, `@Valid` request, return result) and contain no business logic. Repositories only store and fetch: no HTTP types (`ResponseEntity`, `HttpStatus`, `org.springframework.web..`), no calls to services or other modules.
 
-**Why:** Skipping layers creates tight coupling and makes it harder to maintain and evolve the system.
+**Why:** Business rules in controllers are skipped when another entry point (event listener, scheduler) calls the service. HTTP concerns in repositories tie storage to the web layer.
 
 **Correct:**
-controller → service → repository
+public Task get(AuthenticatedUser caller, @PathVariable String id) { return activityService.get(id); }
 **Violation:**
-controller → repository // skipping the service layer
+if (caller.role() != StaffRole.STORE_MANAGER) { ... } // permission rule inside a controller
 
-**Mapping:** each layer can only call the layer directly below it.
-**Checked by:** ArchUnit rule 3 (`./mvnw verify`) — HARD GATE.
+**Checked by:** A2 (controllers never access repositories) — HARD GATE.
+**Blind spot:** logic in controllers, HTTP types in repositories, repositories calling services → LLM check. Each changed file in the Generator summary must name its layer (spec §3.5).
 
 ### R5 · Read-only reports
 
-**Rule:** Report services must only read data from other modules; they must never modify it.
+**Rule:** The reports module aggregates data from activities, programmes and staff and never writes to them. It may use their `service` and `model` packages only, and call read methods only. Writing its own `ReportRepository` is allowed.
 
-**Why:** Modifying data from a read-only perspective can lead to unexpected side effects and violate the principle of separation of concerns.
+**Why:** Reports must be safe to run at any time; a report that changes data makes numbers unreproducible and can corrupt operational state.
 
 **Correct:**
-List<Task> tasks = activityService.list(null, null); // read-only
+List<Task> tasks = activityService.list(programmeId, null);
 **Violation:**
-activityService.create(caller, request); // modifying data from a read-only service
+activityService.delete(caller, taskId); // write from reports
 
-**Mapping:** report services can only call read methods of other services.
-**Checked by:** ArchUnit rule 5 (`./mvnw verify`) — HARD GATE.
+**Checked by:** A6 and A7 — HARD GATE. The spec marks this rule LLM-assessed; sabotage test D showed A6 alone lets `delete` through, so A7 was added (D7).
+**Blind spot:** A7 matches method-name prefixes `create|update|delete|add|remove|save`. A write method named otherwise (e.g. `assign`, `close`) passes → all service write methods must use these prefixes (`coding-conventions`), and the Evaluator keeps "reports is read-only" on its checklist.
 
 ## Allowed dependencies at a glance
 
-activities["activities<br/>Store tasks"]
-programmes["programmes<br/>Store initiatives"]
-reports["reports<br/>Read-only aggregation"]
-staff["staff<br/>Read-only directory"]
-bus(["shared.event<br/>EventBus"])
-alerts["alerts<br/>Notification inbox"]
-
-    activities -->|"requireById"| staff
-    programmes -->|"requireById"| staff
-    reports -->|"list"| activities
-    reports -->|"listForStore"| programmes
-    reports -->|"listByStore"| staff
-    activities -.->|"TaskCreatedEvent<br/>TaskStatusChangedEvent"| bus
-    bus -.->|"@EventListener"| alerts
-    activities -. "programmeId (ID only, not validated)" .- programmes
+| Module          | May call (read only)                                                 | Events                                             | Must never                                                      |
+| --------------- | -------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| activities      | `StaffService`                                                       | emits `TaskCreatedEvent`, `TaskStatusChangedEvent` | import alerts or reports; write to another module               |
+| programmes      | `StaffService`                                                       | —                                                  | import alerts or reports; write to another module               |
+| alerts          | —                                                                    | listens to task events                             | call activities' service or repository                          |
+| reports         | `ActivityService`, `ProgrammeService`, `StaffService` + their models | —                                                  | call write methods; use repository, controller or dto of others |
+| staff           | —                                                                    | —                                                  | depend on any module                                            |
+| shared.security | `StaffService.findById` (resolve caller)                             | —                                                  | grow further dependencies on modules                            |
 
 ## Test quality (failure mode #3)
 
-The test quality section emphasizes that tests should not only pass but also effectively catch potential violations of architectural principles.
-Tests should be designed to fail when a rule is violated, not just to verify correct behavior.
-This ensures that the tests are effective in enforcing architectural principles and catching regressions.
-
-**How to test:**
-
-- Write tests that deliberately violate each architectural rule and verify that the tests fail.
-- Use ArchUnit to automatically enforce layer separation and read-only report rules.
-- Regularly update tests to cover new scenarios and edge cases.
-- Ensure that all architectural rules have corresponding tests that can catch violations.
-- Regularly review and update tests to reflect changes in the architecture and new rules.
-- Ensure that test coverage is comprehensive and that no architectural rule is left untested.
-- Regularly analyze test failures to identify patterns and areas for improvement.
-- Continuously improve the test suite based on feedback and evolving architectural principles.
-- Ensure that the test suite is well-documented and that developers understand the purpose and usage of each test.
-- Regularly review and update documentation to reflect changes in the test suite and architectural principles.
-- Ensure that the test suite is integrated into the CI/CD pipeline to catch violations early and consistently.
-- Regularly review and update the CI/CD pipeline to reflect changes in the test suite and architectural principles.
+A test must assert the business rule, not only the status code. `status().isForbidden()` alone is insufficient; also assert the body (`$.code` is `"FORBIDDEN"`) and the outcome (the task still exists). Coverage thresholds measure quantity, not this → LLM check. Full rules: `how-to-test`.
 
 ## Gate integrity
 
-(never edit ArchitectureTest rules, JaCoCo thresholds, Checkstyle/SpotBugs config, or add exclusions
-to make a build pass; any change to these files = automatic FAIL unless the sprint contract requires it)
+To make a build pass, never:
+
+- edit or remove rules in `ArchitectureTest.java`
+- lower JaCoCo thresholds or change gate plugin configuration in `pom.xml`
+- change Checkstyle/SpotBugs configuration or add exclusions (JaCoCo exclusions are never allowed; a SpotBugs exclusion needs one pattern, one named class, a reason in `JOURNAL.md`, and explicit approval in the sprint contract)
+- delete, `@Disabled` or weaken existing tests, or skip phases (`-DskipTests`, `-Djacoco.skip`)
+
+Evaluator: any diff to these files or patterns without explicit sprint-contract approval = **FAIL**, regardless of score.

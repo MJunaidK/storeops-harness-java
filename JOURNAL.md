@@ -45,12 +45,6 @@
 - **Rationale:** `test` skips JaCoCo thresholds and SpotBugs (bound to verify); the wrapper pins the Maven version across laptop, Docker, CI and the harness.
 - **Assumption:** The verify phase stays fast enough for up to 3 Evaluator iterations per sprint.
 
-### D7 · 2026-10-22 — Hard-gate command is `./mvnw verify`, not `mvn test`
-
-- **Decision:** add a rule that reports may not call methods named create*/update*/delete*/add* on other services
-- **Alternatives:** Document them as known blind spots in the skill file and cover them with the LLM checklist.
-- **Rationale:** it’s the core of failure mode #2 and the fix is small.
-
 ### D7 · 2026-10-22 — ArchUnit rule 7: reports may not call write methods on other modules' services
 
 - **Decision:** Add ArchUnit rule 7: classes in reports must not call methods named create*/update*/delete*/add*/remove*/save* on other modules' service classes.
@@ -80,12 +74,14 @@
   answer, so this would require request/reply messaging or copying data between modules.
   (b) Allow direct write calls (e.g. programmes → `ActivityService.create`) — simpler, but couples
   modules and is exactly client failure mode #4.
-- **Rationale:** Matches PDF §3.5 ("side effects that cross module boundaries via the event bus";
-  "users is read-only for other modules") and the baseline, where every cross-module call is already a read.
+- **Rationale:** Matches PDF §3.5: Module boundary says "cross-module reads go through the target
+  module's service layer only"; Event bus only says "side effects that cross module boundaries must be
+  raised via the event bus". The baseline already follows it: every cross-module call is a read.
 - **Assumption:** Write methods follow the D7 naming prefixes. Events are synchronous in-process
   (`@EventListener`), so a listener's write runs in the same request — acceptable for now.
 - **Consequence:** e.g. planogram templates → programmes emits an event; activities listens and
-  creates the tasks itself.
+  creates the tasks itself. Enforcement today: A5 (partial) + LLM checklist. Possible future gate:
+  widen A7 from reports to all modules.
 
 ## Observations & corrections log
 
@@ -177,3 +173,15 @@
 
 - F before hardening: `UnsupportedOperationException` in ActivityService → PASSED (blacklist gap confirmed).
 - After D7/D8: D → FAILED on rule 7 ✅; F → FAILED on rule 4 ✅. `./mvnw verify` green on baseline.
+
+### 2026-10-23 — architecture-principles draft review: lessons
+
+- First draft repeated the app-context problem: wrong "Checked by" rule numbers, R3 still described the pre-D8 blacklist, and R2 ("no direct calls between modules") would have failed correct baseline code.
+- Five patterns to carry into the next project:
+  1. Verify every name against the source: a name in a skill file is a claim, and agents trust it.
+  2. Test each rule against the baseline: if correct code breaks the rule, the rule is wrong.
+  3. Every rule needs how it's checked + its blind spot, or it can't be enforced consistently.
+  4. Delete generic text: if a sentence fits any project, it adds nothing (test-quality section).
+  5. Re-read the spec table column by column: specific prohibitions (AlertService/ReportService imports, HTTP types in repositories) were missing.
+- Fix: ArchUnit tests renamed A1–A7 in skill files to keep them distinct from architecture rules R1–R5.
+- → Candidate for REFLECTION.md: skill files drift from code and spec; nothing checks them automatically.
