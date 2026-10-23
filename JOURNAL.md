@@ -83,13 +83,25 @@
   creates the tasks itself. Enforcement today: A5 (partial) + LLM checklist. Possible future gate:
   widen A7 from reports to all modules.
 
-### D10 . 2026-10-23 — Demo Feature; Shift handover bulk update
+### D10 · 2026-10-23 — Demo feature: shift handover bulk update
 
-- **Decision:** For invoking the Planner we will use "Add shift handover bulk update" feature - PATCH /api/activities/bulk-status allowing outgoing shift staff to mark multiple operational activities as DONE or BLOCKED in a single
-  request, with partial failure handling and an audit entry per updated task
-- **Alternatives:** (a) SLA breach alerting, notification to the assigned Department lead if task unresolved after a configurable grace period. (b) Regional rollup report, aggregating task list across all stores in the region. (c) Planogram task template, cloning a standard set of PLANOGRAM tasks into a new store programme.
-- **Rationale:** Shift handover bulk update is most self-contained, and it still has real design questions for the Planner to settle explicitly
-- **assumption** Planner can only be tested against a real feature.
+- **Decision:** Use "Add shift handover bulk update" for the demonstration run: `PATCH /api/activities/bulk-status`
+  lets outgoing shift staff mark multiple tasks as DONE or BLOCKED in one request, with partial failure handling
+  and an audit entry per updated task (PDF §3.4).
+- **Alternatives:**
+  (a) SLA breach alerting — needs an injectable `Clock`, a scheduler and a configurable grace period; none exist,
+  and time-based tests are harder to make deterministic.
+  (b) Regional rollup report — needs a store→region model that does not exist (Rita is stored with
+  `storeId = "region-1"`), plus store scoping in activities first.
+  (c) Planogram task template — needs a department on `Task` (only on `UserProfile` today) and a cross-module
+  write from programmes to activities, which D9 requires to go through a new event.
+- **Rationale:** All changes stay inside the activities module and reuse the existing `TaskStatusChangedEvent`;
+  nothing missing from the baseline must be built first. It still forces the Planner to settle real design
+  questions explicitly instead of leaving them to the Generator: valid status transitions, who may update which
+  tasks, the partial-failure response shape, where audit entries live, and whether each task emits its own event.
+  Several of these are documented baseline gaps (no transition rules, no PATCH permission check, no store scoping).
+- **Assumption:** The feature fits in 2–3 sprints, and audit entries can be stored within activities without a new
+  module. If either proves false during the run, revisit this decision.
 
 ## Observations & corrections log
 
