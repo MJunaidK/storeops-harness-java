@@ -70,6 +70,23 @@
 - **Assumption:** Scope stays controller + service packages (matches the spec). Raw exceptions in model,
   repository or dto classes, and dead code removed by javac (sabotage C), remain LLM-review items.
 
+### D9 · 2026-10-23 — Cross-module reads are direct calls; cross-module writes are events
+
+- **Decision:** A module may call read methods (get*/find*/list*/require*) on another module's
+  service. It must never call write methods (create*/update*/delete*/add*/remove*/save*) on another
+  module's service; cross-module side effects are emitted as events via `EventBus` and handled by
+  the owning module's `@EventListener`.
+- **Alternatives:** (a) Events for everything, including reads — impractical: a read needs a synchronous
+  answer, so this would require request/reply messaging or copying data between modules.
+  (b) Allow direct write calls (e.g. programmes → `ActivityService.create`) — simpler, but couples
+  modules and is exactly client failure mode #4.
+- **Rationale:** Matches PDF §3.5 ("side effects that cross module boundaries via the event bus";
+  "users is read-only for other modules") and the baseline, where every cross-module call is already a read.
+- **Assumption:** Write methods follow the D7 naming prefixes. Events are synchronous in-process
+  (`@EventListener`), so a listener's write runs in the same request — acceptable for now.
+- **Consequence:** e.g. planogram templates → programmes emits an event; activities listens and
+  creates the tasks itself.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
