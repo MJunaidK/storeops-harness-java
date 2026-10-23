@@ -83,6 +83,14 @@
   creates the tasks itself. Enforcement today: A5 (partial) + LLM checklist. Possible future gate:
   widen A7 from reports to all modules.
 
+### D10 . 2026-10-23 — Demo Feature; Shift handover bulk update
+
+- **Decision:** For invoking the Planner we will use "Add shift handover bulk update" feature - PATCH /api/activities/bulk-status allowing outgoing shift staff to mark multiple operational activities as DONE or BLOCKED in a single
+  request, with partial failure handling and an audit entry per updated task
+- **Alternatives:** (a) SLA breach alerting, notification to the assigned Department lead if task unresolved after a configurable grace period. (b) Regional rollup report, aggregating task list across all stores in the region. (c) Planogram task template, cloning a standard set of PLANOGRAM tasks into a new store programme.
+- **Rationale:** Shift handover bulk update is most self-contained, and it still has real design questions for the Planner to settle explicitly
+- **assumption** Planner can only be tested against a real feature.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
