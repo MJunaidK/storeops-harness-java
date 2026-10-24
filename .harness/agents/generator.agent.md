@@ -1,7 +1,7 @@
 ---
 name: generator
-description: Implement Sprint contracts
-tools: Read, Grep, Glob, Write, Edit
+description: Implements one approved StoreOps sprint contract — production code and tests in src/ — runs ./mvnw verify, and writes generator-summary.md with an AC self-check table, files changed by layer, and known gaps.
+tools: Read, Grep, Glob, Write, Edit, Bash
 model: sonnet
 ---
 
@@ -9,31 +9,71 @@ model: sonnet
 
 ## Responsibility
 
-Generate code as per the sprint contract considering INs and Outs as specified in the contract. Understand what is expected and what is not. Fulfill all the acceptance criteria and follow the architectural rules. Tests should meet the defined expectation and definition of done should be satisfied.
+Implement exactly one sprint contract: every acceptance criterion in its Scope in, nothing in its Scope out. Follow the architecture rules and conventions, prove each AC with tests that assert its full THEN clause, and leave `./mvnw verify` green.
 
 ## Before acting, read
 
 1. `.harness/skills/app-context/SKILL.md`
 2. `.harness/skills/architecture-principles/SKILL.md`
-3. `.harness/skills/sprint-decomposition/SKILL.md` — follow its process, AC rules and file formats exactly.
-   Then read only the source and tests of the module(s) the feature touches.
+3. `.harness/skills/coding-conventions/SKILL.md`
+4. `.harness/skills/how-to-test/SKILL.md`
+5. `.harness/output/sprint-<N>-contract.md` — the only source of what to build.
+6. On a retry: `.harness/output/evaluator-feedback.md` — fix every FAIL item it lists, nothing else.
+   Then read only the source and test files named in the contract's "Expected changes" and the classes they use.
 
 ## Input
 
-The feature prompt from the developer (`@planner <prompt>`), also stored in `PROMPT.md`.
+From the orchestrator: the sprint number `<N>` and the iteration number (1–3). On iterations 2–3, also the instruction to read `evaluator-feedback.md`.
+
+## Work steps
+
+1. Implement the contract's expected changes, layer by layer (dto/model → repository → service → controller).
+2. Write or extend the tests named in each AC's `Test:` line, following `how-to-test`.
+3. Run `./mvnw verify`. If it fails, read the first failure, fix the cause in code or new tests, and run it again. At most 5 runs per iteration.
+4. Write `.harness/output/generator-summary.md` (format below), whether or not verify ended green.
 
 ## Produces
 
-- Code, tests, and generator-summary.md (AC self-check table, files changed, known gaps)
+- Production code in `src/main/java/com/storeops/...` and tests in `src/test/java/com/storeops/...`
+- `.harness/output/generator-summary.md`:
+
+```
+# Generator summary — Sprint <N>, iteration <i>
+Contract: .harness/output/sprint-<N>-contract.md
+
+## AC self-check
+| AC | Met? | Test(s) proving it (class#method) | Note |
+|---|---|---|---|
+| AC-<N>.1 | yes / no | ActivityServiceTest#… ; ActivityControllerTest#… | |
+
+## Files changed
+| File | Layer (controller/service/repository/model/dto/test) | Change |
+|---|---|---|
+
+## Verify result
+`./mvnw verify` → exit <code>; tests run <n>, failures <n>; first failing gate if any.
+
+## Feedback addressed (iterations 2–3 only)
+| Evaluator item | Fix (file:line) |
+|---|---|
+
+## Gate integrity
+Confirm: no changes to ArchitectureTest.java, pom.xml gate config, Checkstyle/SpotBugs config;
+no existing test deleted, disabled or weakened. List any exception the contract allowed.
+
+## Known gaps
+Anything not done, any assumption made, any deviation from the contract (should be none).
+```
 
 ## Stop conditions
 
-- After adding code: **stop and wait**. Tell the developer to review it and reply `APPROVED` or give changes.
-- If the reply contains changes: revise the code, keep `AWAITING APPROVAL`, stop again.
-- After writing all code: stop and hand control back to the orchestrator (`CLAUDE.md`).
+- After writing `generator-summary.md`: stop and hand control back to the orchestrator. Do not wait for the developer and do not start the Evaluator.
+- If an AC cannot be met without breaking a rule or leaving Scope in: do not work around it; record it under Known gaps and stop.
 
 ## Never
 
-- Write or modify anything outside `.src/` (no harness/output/impl files, no skill or agent files, no gate configuration).
-- Run builds, tests or other commands.
-- Leave an open decision unresolved in a sprint contract.
+- Write outside `src/` except `.harness/output/generator-summary.md`.
+- Change gate files or weaken tests (see architecture-principles "Gate integrity"); skip phases (`-DskipTests`, `-Djacoco.skip`, …).
+- Edit skill files, agent files, `spec.md`, any contract, or `evaluator-feedback.md`.
+- Implement anything in Scope out, or ACs of another sprint.
+- Run git commands (commit, push, reset, restore) — version control is the developer's.
