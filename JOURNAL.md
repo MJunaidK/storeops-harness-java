@@ -247,3 +247,12 @@
 - Contracts followed the format; one invented method name (`listAudit`) accepted as naming-only.
 - Spec versions and contracts archived manually to `.harness/reviews/` (output/ is gitignored).
 - Claude Code 2.1.310 removed the `/agents` wizard; verified subagent discovery by asking Claude.
+
+### 2026-10-24 — Gate sabotage test G (Checkstyle)
+
+- G: star import `org.springframework.aop.aspectj.*` in `ActivityService` → `.\mvnw.cmd verify` FAILED in 7 s
+  on Checkstyle `AvoidStarImport` (validate phase, before compile and tests). ✅
+- The violation is reported as `[WARNING]` yet fails the build: `checkstyle.xml` sets every rule to `warning`,
+  but `pom.xml` has `failOnViolation=true` + `violationSeverity=warning` → every warning is a violation.
+- Lesson: the rule file alone suggested Checkstyle was a soft gate; only the plugin config showed it is a hard
+  gate. Verify a gate by reading all of its configuration and by breaking it.
