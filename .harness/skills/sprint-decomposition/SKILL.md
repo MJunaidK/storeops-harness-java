@@ -1,91 +1,119 @@
 ---
 name: sprint-decomposition
-description: How the Planner turns a StoreOps feature request into an approval-ready spec, vertical-slice sprint contracts, and testable acceptance criteria.
+description: How the Planner turns a StoreOps feature request into an approval-ready spec, vertical-slice sprint contracts, and testable GIVEN/WHEN/THEN acceptance criteria.
 ---
 
 # Sprint decomposition
 
 ## Purpose
 
-Turn the feature request into a small sequence of independently verifiable vertical slices. The Planner defines observable behavior, design decisions, and boundaries; the Generator implements only an approved sprint contract; the Evaluator checks the contract and repository gates. Do not let implementation details or unresolved product choices be guessed by the Generator.
+Turn a feature request into a small sequence of independently verifiable vertical slices. The Planner defines observable behaviour, design decisions and boundaries; the Generator implements only an approved sprint contract; the Evaluator checks that contract plus the repository gates. No product or contract choice may be left for the Generator to guess.
 
-## Inputs and source of truth
+## Inputs (read only these)
 
-- Read the feature request in full and quote it verbatim in `spec.md`.
-- Read `.harness/skills/app-context/SKILL.md` for the current baseline and known gaps, and `.harness/skills/architecture-principles/SKILL.md` for architecture rules and their enforcement.
-- Confirm relevant facts against current source, tests, `pom.xml`, and `docs/architecture.md`. Treat skills and diagrams as guides that may drift; source and executable tests determine what the application currently does.
-- Use `JOURNAL.md` for recorded design decisions and feature assumptions. Do not treat a recorded demo choice as an approved requirement unless the user or feature prompt adopts it.
-- Do not invent endpoints, classes, fields, response shapes, permissions, or existing behavior. Mark uncertainty as an open decision and resolve it before approval.
+1. The feature prompt (from the developer's `@planner` message; also stored in `PROMPT.md`).
+2. `.harness/skills/app-context/SKILL.md`: modules, real class names, seed users, **known baseline gaps**.
+3. `.harness/skills/architecture-principles/SKILL.md`: rules R1–R5 and how each is checked (A1–A7).
+4. Source of the **affected module only** (controller, service, model, dto) and its existing tests, to confirm current behaviour. Do not read other modules unless the feature calls them.
+
+Do not read `JOURNAL.md`, `.harness/reviews/` or unrelated modules: they cost context and are not requirements. If a skill file contradicts the source, the source wins: note the contradiction in `spec.md` under Risks.
+
+Never invent endpoints, classes, fields, response shapes, permissions or existing behaviour. Mark uncertainty as an open decision and resolve it before approval.
+
+## Outputs and approval
+
+- Write `.harness/output/spec.md` with `STATUS: AWAITING APPROVAL` as its first line, then **stop**. Do not write contracts or code before approval.
+- When the developer replies `APPROVED`, change the first line to `STATUS: APPROVED` and write one `.harness/output/sprint-<N>-contract.md` per sprint.
+- If the developer replies with changes instead, revise `spec.md`, keep `STATUS: AWAITING APPROVAL`, and stop again.
 
 ## Decomposition process
 
-1. Summarize the requested user outcome and identify affected modules, API surfaces, data, events, and architecture rules.
-2. Compare the request with the baseline. For each relevant known gap, either define the intended behavior in an acceptance criterion or explicitly mark it out of scope.
-3. List decisions needed to make the behavior implementable and testable. Resolve each in `spec.md` with the selected option and rationale; do not leave product or contract decisions to the Generator.
-4. Order sprints by dependency and user value. Each sprint is a vertical slice with a coherent, demonstrable outcome, not a layer-only phase. Keep prerequisites in earlier slices only when later slices need them.
-5. Aim for no more than six acceptance criteria per sprint. Split larger work by meaningful outcomes, not merely to satisfy the count. State why each boundary exists.
-6. Give each sprint a contract that can be implemented and verified without relying on unstated decisions. A sprint is done only when its acceptance criteria pass and `./mvnw verify` exits successfully.
+1. Summarise the user outcome and identify affected modules, endpoints, models, events and rules R1–R5.
+2. Run the **baseline-gap check** (below).
+3. List and resolve the **open decisions** (below), each with an ID `DEC-<n>`.
+4. Order sprints by dependency and user value. Each sprint is a vertical slice with a demonstrable outcome (request in, behaviour out), not a layer-only phase such as "repository changes".
+5. Size: at most **6 ACs per sprint** and normally **2–3 sprints per feature**. Each Generator↔Evaluator loop allows 3 iterations; small sprints fail cheaper. Split by meaningful outcome, not to hit a count, and write the reason for every boundary in `spec.md`.
+6. **Every sprint must leave `./mvnw verify` green on its own**, including JaCoCo thresholds (service ≥ 80%, controller ≥ 70%). Tests for a sprint's ACs therefore belong in that sprint; never defer tests to a later sprint.
 
 ## Acceptance criteria
 
-Write criteria in GIVEN / WHEN / THEN form and assign stable IDs `AC-<sprint>.<number>` (for example, `AC-1.1`). Each criterion must:
+Format: GIVEN / WHEN / THEN (AND …), ID `AC-<sprint>.<n>` (e.g. `AC-2.3`), one behaviour per AC. Each AC must:
 
-- Describe one externally observable behavior or business rule, with enough setup to reproduce it.
-- State exact inputs and relevant caller/role, resource state, endpoint, and request body where applicable.
-- Specify the expected status, response fields or error code, and resulting persisted state. Include emitted or absent events when they are part of the behavior.
-- Name the verification level and likely test location, such as `Mockito unit (ActivityServiceTest)` or `MockMvc (ActivityControllerTest)`. Use both when service behavior and the HTTP contract each need direct coverage.
-- Avoid subjective terms such as “properly”, “correctly”, “appropriate”, or “should handle”. Replace them with measurable outcomes.
-- Avoid prescribing implementation unless a design constraint requires it; acceptance criteria define behavior, while the sprint contract records implementation boundaries.
+- **GIVEN:** name the caller using seed users (`u-manager` STORE_MANAGER, `u-lead` DEPARTMENT_LEAD, `u-associate` ASSOCIATE, `u-regional` REGIONAL_MANAGER) and the exact starting state (task status, owner, assignee).
+- **WHEN:** give the exact HTTP method, path, `X-User-Id` header and request body, or the exact service call for unit-level ACs.
+- **THEN:** give the exact status code; the exact response fields; for errors, the `code` value of the `AppError` subclass (`ForbiddenError` → 403, `NotFoundError` → 404, `ValidationError` → 400, `ConflictError` → 409, `UnauthorizedError` → 401); the **state afterwards** (e.g. "T-1 remains IN_PROGRESS"); and events emitted **or explicitly not emitted** when side effects are part of the behaviour.
+- **Test:** name the level and class: `Mockito unit (ActivityServiceTest)` for business rules, `MockMvc (ActivityControllerTest)` for the HTTP contract. Use both when the rule and the HTTP mapping each need direct coverage.
+- Never use subjective words: "properly", "correctly", "appropriate", "should handle", "gracefully". Replace each with a measurable outcome.
+- Describe behaviour, not implementation; implementation boundaries go in the sprint contract.
 
-Do not require an event assertion for a behavior that emits no event. Do not use coverage percentage as proof that a criterion is tested: the test must assert the behavior and relevant state change.
+**StoreOps test data:** seed data contains only `store-1`. An AC about store isolation must state that its test creates data for a second store (e.g. `store-2`) in the test setup; it cannot be demonstrated with seed data alone.
+
+Coverage is not evidence that an AC is tested: the test must assert the AC's response and its state change.
 
 ## Baseline-gap check
 
-For every known gap that the feature touches, record one of:
+For every gap in app-context's "Known baseline gaps" table that the feature touches, record in `spec.md` one of:
 
-- **In scope:** acceptance criteria state the intended behavior, including authorization, validation, state changes, and side effects as relevant.
-- **Out of scope:** explicitly state that existing behavior remains unchanged and that the gap is not fixed by this feature.
+- **In scope:** the AC IDs that define the intended behaviour.
+- **Out of scope:** "existing behaviour unchanged; gap not fixed by this feature".
 
-Do not silently broaden the feature to repair unrelated gaps. If a gap blocks the requested behavior, raise it as a dependency or open decision and get it resolved in the spec.
+Gaps most features touch: tasks not store-scoped, PATCH has no permission check, no status transition rules, assignee cannot be cleared, events synchronous, status sent as String in events. Do not silently repair unrelated gaps. If a gap blocks the feature, make it an open decision.
 
 ## Open decisions
 
-Resolve decisions that affect the API or event contract, authorization, validation, persistence/state transitions, partial failure, ordering, idempotency, concurrency, or compatibility. For each, record the question, chosen answer, and brief rationale; note material alternatives when useful. A sprint contract must not contain unresolved choices that change acceptance behavior.
+Resolve every choice that changes behaviour the Evaluator will test. For StoreOps features these usually include:
+
+- **Transitions:** which `TaskStatus` changes are allowed (TODO, IN_PROGRESS, DONE, BLOCKED)?
+- **Authorization:** which roles, owner or assignee may perform the action; behaviour for other stores' data.
+- **Errors:** which `AppError` subclass for each failure, and per-item vs whole-request failure.
+- **Response shape:** exact JSON fields and status code, including partial success.
+- **Events:** which `DomainEvent` is emitted per change (D9: cross-module side effects only via `EventBus`), and which `AlertType` alerts should produce.
+- **Persistence:** where new data lives (inside the owning module per R1) and whether it is exposed via an endpoint.
+- **Limits:** batch size, duplicates, empty input, idempotency.
+
+Record each as `DEC-<n>`: question → chosen answer → one-line rationale (and the rejected alternative when it matters). A sprint contract must not contain an unresolved decision.
 
 ## `spec.md` format
 
-Keep `STATUS: AWAITING APPROVAL` as the first line until the user explicitly approves the spec. Include:
-
-1. The feature request quoted verbatim.
-2. A concise outcome and affected baseline surfaces.
-3. Relevant baseline gaps, each marked in scope with AC references or out of scope.
-4. Resolved design decisions and rationale; remaining questions, if any, clearly marked as blocking approval.
-5. Ordered sprint list with each sprint's outcome, AC IDs, dependencies, and reason for its boundary.
-6. Any assumptions and risks that could change scope or behavior.
-
-Do not start implementation from a draft that is awaiting approval.
+```
+STATUS: AWAITING APPROVAL
+# Spec: <feature name>
+## Feature prompt          (verbatim, as in PROMPT.md)
+## Outcome                 (2–4 lines)
+## Affected surfaces       (modules, endpoints, classes, events, rules R1–R5)
+## Baseline gaps           (gap → in scope: AC-x.y | out of scope)
+## Decisions               (DEC-1 … DEC-n)
+## Sprints                 (per sprint: outcome, AC IDs, dependencies, reason for boundary)
+## Acceptance criteria     (all ACs, grouped by sprint)
+## Assumptions and risks
+```
 
 ## `sprint-N-contract.md` format
 
-Each contract must include:
+```
+# Sprint <N> contract: <outcome>
+Spec: .harness/output/spec.md (APPROVED)   Decisions applied: DEC-…
+## Scope in / Scope out    (incl. baseline gaps explicitly left unchanged)
+## Expected changes        (layer → existing file to modify or new class to add; real names only)
+## Acceptance criteria     (copied verbatim from spec.md, same IDs)
+## Architecture rules      (which of R1–R5 apply; hard gate A-rule vs Evaluator review)
+## Test expectations       (per AC: test class, and the state/event assertions required)
+## Definition of done      (all ACs pass; no unrelated behaviour changed; ./mvnw verify exits 0;
+                            no gate files changed — see architecture-principles "Gate integrity")
+```
 
-- Link/reference to the approved `spec.md` and sprint outcome.
-- Scope in and out, including relevant baseline gaps explicitly left unchanged.
-- Dependencies on earlier sprints and expected files/layers where known; do not invent filenames.
-- The sprint's acceptance criteria copied without changing their meaning or IDs.
-- Applicable architecture principles R1–R5 and any relevant hard-gate checks, accurately distinguishing automated enforcement from Evaluator review.
-- Test expectations tied to the ACs, including state and event assertions where relevant.
-- Definition of done: all sprint ACs pass, no unrelated behavior is changed, and `./mvnw verify` exits 0.
+Traceability is checked: `spec.md` quotes the prompt; each contract references the spec and its `DEC` IDs; the Generator's summary reports per AC ID; the Evaluator's feedback references AC IDs and files.
 
 ## Example criterion
 
-Illustrative only; this describes behavior already represented by the baseline activity-controller test, not a new feature requirement:
+Illustrative only: it describes behaviour already in the baseline, not a new requirement.
 
 ```text
 AC-1.1 · A non-owner associate cannot delete another user's task
-GIVEN task T-1 exists and is owned by u-lead
-WHEN u-associate sends DELETE /api/activities/T-1
-THEN the response is 403 with code FORBIDDEN
-AND T-1 remains retrievable
+GIVEN task T-1 exists, owned by u-lead, status TODO
+WHEN u-associate sends DELETE /api/activities/T-1 with header X-User-Id: u-associate
+THEN the response is 403 with body code "FORBIDDEN"
+AND GET /api/activities/T-1 by u-lead still returns 200
+AND no event is emitted
 Test: MockMvc (ActivityControllerTest)
 ```
