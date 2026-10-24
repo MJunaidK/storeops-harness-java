@@ -227,3 +227,23 @@
   5. Re-read the spec table column by column: specific prohibitions (AlertService/ReportService imports, HTTP types in repositories) were missing.
 - Fix: ArchUnit tests renamed A1–A7 in skill files to keep them distinct from architecture rules R1–R5.
 - → Candidate for REFLECTION.md: skill files drift from code and spec; nothing checks them automatically.
+
+### 2026-10-24 — Agent token and time consumption
+
+- Per-agent token count is visible only while the agent runs (e.g. planner revise ≈ 40.3k tokens, 1m 13s);
+  after completion it disappears from the CLI → Monitor cannot measure cost itself; orchestrator must
+  capture and pass it, or the Monitor estimates.
+- Planner run 2 (contracts) took 8m 8s.
+
+### 2026-10-24 — Planner phase completed (first real run)
+
+- Flow worked end to end: `@planner` → planner subagent → spec v1 → change request → spec v2 → APPROVED →
+  3 sprint contracts. Every step traced to a harness file (CLAUDE.md, wrapper, planner.agent.md, 3 skills).
+- Change request (4 items: audit endpoint STORE_MANAGER-only, one behaviour per AC, class name in Risks,
+  verify error codes) was applied correctly; status stayed AWAITING APPROVAL. The Planner found and fixed a
+  real error: v1 assumed "Malformed request" for every invalid case.
+- Spec grew from 2 to 3 sprints (6 ACs each). Sprint 2 boundary is partly count-driven (BLOCKED → DONE
+  placed in the validation sprint) — accepted trade-off.
+- Contracts followed the format; one invented method name (`listAudit`) accepted as naming-only.
+- Spec versions and contracts archived manually to `.harness/reviews/` (output/ is gitignored).
+- Claude Code 2.1.310 removed the `/agents` wizard; verified subagent discovery by asking Claude.

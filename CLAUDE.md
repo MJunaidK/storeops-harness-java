@@ -34,10 +34,12 @@ subagent of that name and passing only the inputs listed below — never the con
 2. Planner writes `.harness/output/spec.md` with first line `STATUS: AWAITING APPROVAL` and ends.
 3. Tell the developer to review `spec.md` (decisions, sprints, acceptance criteria) and reply
    `APPROVED` or describe changes. Then wait.
-4. Changes → start **planner** run 1 again with the requested changes; status stays
+4. Changes → first copy `.harness/output/spec.md` to `.harness/reviews/spec-v<n>.md` (n = 1, 2, … the
+   version being replaced), then start **planner** run 1 again with the requested changes; status stays
    `AWAITING APPROVAL`; return to step 3.
 5. `APPROVED` → start **planner** run 2. It sets `STATUS: APPROVED` and writes one
-   `.harness/output/sprint-<N>-contract.md` per sprint.
+   `.harness/output/sprint-<N>-contract.md` per sprint. Then copy `spec.md` to
+   `.harness/reviews/spec-approved.md` and each contract to `.harness/reviews/sprint-<N>-contract.md`.
 6. For each sprint in order: **generator** → **evaluator**, repeated per the routing rules below.
 7. After each sprint's final verdict (or escalation): archive that sprint's `generator-summary.md` and
    `evaluator-feedback.md` to `.harness/reviews/` as `sprint-<N>-generator-summary.md` and
