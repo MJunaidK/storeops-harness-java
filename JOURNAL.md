@@ -103,6 +103,28 @@
 - **Assumption:** The feature fits in 2–3 sprints, and audit entries can be stored within activities without a new
   module. If either proves false during the run, revisit this decision.
 
+### D11 · 2026-10-23 — Agents run as Claude Code subagents via thin wrappers in .claude/agents/
+
+- **Decision:** Agent definitions stay in `.harness/agents/*.agent.md` (PDF §5.2/§7). For each agent,
+  `.claude/agents/<name>.md` is a thin wrapper: frontmatter only (`name`, `description`, `tools`, `model`)
+  plus one instruction to read and follow `.harness/agents/<name>.agent.md`. `CLAUDE.md` starts each agent
+  as a subagent and passes only the inputs it needs.
+- **Alternatives:**
+  (a) `CLAUDE.md` only: the main session reads the agent file and plays each role itself. Simplest, but
+  there is no context reset between agents and the tool limits in the frontmatter are not enforced.
+  (b) Move the definitions into `.claude/agents/`: native subagents with no extra files, but breaks the
+  required `.harness/agents/` structure.
+- **Rationale:** Claude Code only discovers subagents in `.claude/agents/`, where frontmatter `tools` and
+  `model` are enforced and each subagent runs in its own fresh context window (checked in Claude Code docs,
+  2026-10-23). Wrappers keep the PDF structure as the single source of truth, give each agent least-privilege
+  tools, and make the context reset between agents structural: the Evaluator never sees the Generator's
+  reasoning, only its files.
+- **Assumption:** The wrapper's single instruction is followed reliably, so the definition in `.harness/agents/`
+  is what the agent actually uses. Risk: tools/model can drift between the wrapper and the definition's
+  frontmatter, so the wrapper is the one that counts and the two must be kept identical.
+- **Consequence:** A subagent runs once and ends; it cannot wait for `APPROVED`. The Planner therefore runs
+  twice (run 1: `spec.md`; run 2: contracts), with the developer's approval in the main session in between.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
