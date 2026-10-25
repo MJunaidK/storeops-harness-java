@@ -1,9 +1,15 @@
 # Sprint 3 contract: Audit entry per updated task
-Spec: .harness/output/spec.md (APPROVED)   Decisions applied: DEC-1 (`note`), DEC-3 (`note` length), DEC-11, DEC-12
+
+> **AMENDMENT 2026-10-24 (after Sprint 1 review)**
+>
+> - The service method is `updateStatusBulk`, not `bulkUpdateStatus` (D7 write-prefix rule).
+
+Spec: .harness/output/spec.md (APPROVED) Decisions applied: DEC-1 (`note`), DEC-3 (`note` length), DEC-11, DEC-12
 
 ## Scope in / Scope out
 
 In:
+
 - Optional `note` (String, max 500 characters) on `BulkStatusItem`. A longer note rejects the whole request with `ValidationError` (400, `VALIDATION_ERROR`, non-empty message), nothing changed, no audit entry. Exactly 500 characters is accepted.
 - `AuditEntry(id, taskId, actorId, oldStatus, newStatus, note, occurredAt)`; statuses as enum-name Strings; `note` may be null; `id` is a generated non-null String; `occurredAt` is a non-null `Instant`.
 - One entry per successfully updated task, written in the same `bulkUpdateStatus` call as the task update (after the task is saved). None for failed items or rejected requests. `actorId` is the caller's id.
@@ -11,6 +17,7 @@ In:
 - `GET /api/activities/{id}/audit`: JSON array of `AuditEntry` for that task, oldest first; `[]` when none. Check order: role first (only `STORE_MANAGER` allowed, else `ForbiddenError` 403 `FORBIDDEN`, including for unknown ids), then task existence (`NotFoundError` 404 `NOT_FOUND`, message `"Task not found: <id>"`).
 
 Out (unchanged, do not fix):
+
 - Audit entries from the existing `PATCH /api/activities/{id}` are not recorded.
 - Audit is not store-scoped (tasks are not store-scoped); a STORE_MANAGER can read any task's audit.
 - No new `DomainEvent`, no `AlertService` change, no pagination or filtering on the audit endpoint.
