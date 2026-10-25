@@ -29,7 +29,9 @@ From the orchestrator: the sprint number `<N>` and the iteration number (1–3).
 
 1. Implement the contract's expected changes, layer by layer (dto/model → repository → service → controller).
 2. Write or extend the tests named in each AC's `Test:` line, following `how-to-test`.
-3. Run `./mvnw verify`. If it fails, read the first failure, fix the cause in code or new tests, and run it again. At most 5 runs per iteration.
+3. Run `./mvnw verify` exactly as written — no pipes (`|`), no `-q`, no extra `-D` flags. Read the result from
+   its own output: the `BUILD SUCCESS` / `BUILD FAILURE` line and the `Tests run:` summary. If it fails, read the
+   first failure, fix the cause in code or new tests, and run it again. At most 5 runs per iteration.
 4. Write `.harness/output/generator-summary.md` (format below), whether or not verify ended green.
 
 ## Produces
@@ -77,3 +79,7 @@ Anything not done, any assumption made, any deviation from the contract (should 
 - Edit skill files, agent files, `spec.md`, any contract, or `evaluator-feedback.md`.
 - Implement anything in Scope out, or ACs of another sprint.
 - Run git commands (commit, push, reset, restore) — version control is the developer's.
+- Create or modify files through Bash (`cat >`, heredocs, `sed`, Python or other scripts). Use only the Write
+  and Edit tools for files; use Bash only to run `./mvnw verify` and read-only commands (`ls`, `grep`, `cat`).
+- Pipe or filter `./mvnw verify` (`| tail`, `| grep`, `; echo $?`): a pipe hides the real exit code and can
+  report a failed build as green.
