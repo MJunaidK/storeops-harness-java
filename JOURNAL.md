@@ -340,3 +340,19 @@
   (`bulkUpdateWithNullItemsListIsEmptyResponse`, `assertThat(t2.updatedAt()).isEqualTo(before)`)
   → leakage: the example gave away Sprint 1's findings, so this run cannot prove the checklist works.
 - Fix: make the worked example generic (invented names); re-run on Sprint 1 for a fair test.
+
+### 2026-10-25 — Evaluator sprint 1, iteration 1: clean re-run after D14
+
+- Same verdict and findings as the leaked run, found independently: FAIL on SC-2 (B)
+  (ActivityServiceTest.java:331; also BulkStatusRequest.java:8), TQ-4 (C) (ActivityServiceTest.java:314),
+  CC-3 PASS (deviation listed with D7 reason). Scores 100/82/100, total 93. 7m 14s.
+- New vs leaked run: traced SC-2 to spec DEC-2 and gave a concrete fix instruction.
+- Matches my manual review (F2 → SC-2, F3 → TQ-4) → checklist + grading rules validated on real code.
+
+### 2026-10-25 — Usage after Evaluator sprint 1 (2 runs: leaked + clean)
+
+- Weekly 25% → 26% for both runs (includes chat in the same window → upper bound); session window reset
+  mid-run, not comparable. Subagent shares (24h): generator 42%, evaluator 36%.
+- One evaluation ≈ 7 min and < 1% weekly; one full iteration (Generator + Evaluator) ≈ 1–1.5% weekly
+  → Sprints 2–3 with retries fit before the weekly reset. Claude Code again suggested a cheaper generator
+  model — not applied (D3/D13 reasoning holds).
