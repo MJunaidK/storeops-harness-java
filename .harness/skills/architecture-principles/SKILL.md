@@ -126,6 +126,16 @@ To make a build pass, never:
 - edit or remove rules in `ArchitectureTest.java`
 - lower JaCoCo thresholds or change gate plugin configuration in `pom.xml`
 - change Checkstyle/SpotBugs configuration or add exclusions (JaCoCo exclusions are never allowed; a SpotBugs exclusion needs one pattern, one named class, a reason in `JOURNAL.md`, and explicit approval in the sprint contract)
-- delete, `@Disabled` or weaken existing tests, or skip phases (`-DskipTests`, `-Djacoco.skip`)
+- weaken a protected test (below), or skip phases (`-DskipTests`, `-Djacoco.skip`)
 
 Evaluator: any diff to these files or patterns without explicit sprint-contract approval = **FAIL**, regardless of score.
+
+### Protected tests (GI-2)
+
+- **Protected:** all test code in `src/test` that exists on `main`: test methods, setup (`@BeforeEach`), helpers and fields. A sprint's tests become protected when that sprint is merged to `main`.
+- **Sprint-owned:** test code added on the current sprint branch that is not yet on `main`.
+- **Rule:** protected test code is never deleted, `@Disabled`, renamed, reformatted, or has an assertion removed or loosened. Only exception: a change the sprint contract (or its AMENDMENT) names explicitly (e.g. constructor wiring for a new dependency).
+- Sprint-owned test code may be changed or removed only to fix an Evaluator finding. Each such change is listed in the generator summary under "Feedback addressed" with `class#method` and the finding ID.
+- **Checked by:** `git diff --merge-base main -- src/test`. Every removed (`-`) line is in protected code, because sprint-owned code was never on `main`. Each `-` line must be covered by an explicit contract exception; otherwise GI-2 FAIL.
+- **Precondition:** each sprint branch is created from `main` after the previous sprint is merged, and `main` is merged into the sprint branch before each iteration.
+- **Blind spot:** changes to sprint-owned tests between iterations are not in this diff. They show only in the generator summary, and a weakened test is caught by re-running TQ-1 to TQ-3 against the ACs.

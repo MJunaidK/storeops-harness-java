@@ -157,6 +157,25 @@
 - **Assumption:** Invented examples still teach the rules well enough; verify by re-running sprint 1
   and checking that the evaluator still finds SC-2 and TQ-4 on its own.
 
+### D15 · 2026-10-25 — Protected tests = test code on main; review diff = working tree vs merge base
+
+- **Decision:** Test code that exists on `main` is protected (methods, setup, helpers, fields); test code added
+  on the sprint branch is sprint-owned and may be changed or removed only to fix an Evaluator finding, listed
+  in the generator summary. Defined once in architecture-principles "Protected tests"; how-to-test,
+  how-to-review (GI-2) and generator.agent.md refer to it. The Evaluator diffs with `git diff --merge-base main`.
+- **Alternatives:** (a) Literal GI-2 ("no existing test changed"): deadlock, because the SC-2 fix requires
+  removing a test the Generator added in iteration 1. (b) File-level protection (only new test files editable):
+  the scope-out test was a new method inside the existing `ActivityServiceTest.java`, so it still deadlocks.
+  (c) Any test change allowed if justified in the summary: needs LLM judgement and makes weakening tests easy.
+- **Rationale:** In a diff against the merge base, every removed (`-`) line is protected code, because
+  sprint-owned code was never on main. The check stays mechanical: no `-` lines in `src/test` unless the
+  contract names the change explicitly (e.g. Sprint 3 constructor wiring).
+- **Assumption:** Each sprint branch starts from `main` after the previous sprint is merged, and `main` is merged
+  into the sprint branch before each iteration. Changes to sprint-owned tests between iterations are not in
+  the diff; they are covered by the summary and by re-running TQ-1 to TQ-3.
+- **Consequence:** A sprint's tests become protected when it merges to `main`. Who merges, and when the next
+  branch is created, is still open (→ D16, CLAUDE.md routing).
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
@@ -356,3 +375,13 @@
 - One evaluation ≈ 7 min and < 1% weekly; one full iteration (Generator + Evaluator) ≈ 1–1.5% weekly
   → Sprints 2–3 with retries fit before the weekly reset. Claude Code again suggested a cheaper generator
   model — not applied (D3/D13 reasoning holds).
+
+### 2026-10-25 — Archive location and review diff base
+
+- Sprint 1 iteration 1 archives had been committed on `sprint-1`, so the Evaluator saw them in its diff and
+  had to explain them away (SH-2). Moved them to `main` (`d69b0cc`); all archives now live on `main`.
+- Proposed `git diff main...HEAD` so later harness commits on `main` would not appear in the review diff.
+  Wrong: the Generator never commits, and `...HEAD` compares commits only, so the Evaluator would miss all
+  of the iteration's work. `git diff --merge-base main` compares the working tree with the merge base: it
+  sees uncommitted work and ignores later commits on `main`. Verified on `main`: it listed my uncommitted edits.
+- Lesson: before choosing a diff command, check where each agent leaves its work (committed or working tree).

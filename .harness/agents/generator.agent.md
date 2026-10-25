@@ -18,7 +18,7 @@ Implement exactly one sprint contract: every acceptance criterion in its Scope i
 3. `.harness/skills/coding-conventions/SKILL.md`
 4. `.harness/skills/how-to-test/SKILL.md`
 5. `.harness/output/sprint-<N>-contract.md` — the only source of what to build.
-6. On a retry: `.harness/output/evaluator-feedback.md` — fix every FAIL item it lists, nothing else.
+6. On a retry: `.harness/output/evaluator-feedback.md` — fix every item under "Must fix" or "Conditions", nothing else.
    Then read only the source and test files named in the contract's "Expected changes" and the classes they use.
 
 ## Input
@@ -56,12 +56,13 @@ Contract: .harness/output/sprint-<N>-contract.md
 `./mvnw verify` → exit <code>; tests run <n>, failures <n>; first failing gate if any.
 
 ## Feedback addressed (iterations 2–3 only)
-| Evaluator item | Fix (file:line) |
-|---|---|
+| Evaluator item | Fix (file:line) | Test changed or removed (class#method), if any |
+|---|---|---|
 
 ## Gate integrity
 Confirm: no changes to ArchitectureTest.java, pom.xml gate config, Checkstyle/SpotBugs config;
-no existing test deleted, disabled or weakened. List any exception the contract allowed.
+no protected test (architecture-principles "Protected tests") deleted, disabled, renamed, reformatted or weakened.
+List each change to a protected test that the contract explicitly allowed.
 
 ## Known gaps
 Anything not done, any assumption made, any deviation from the contract (should be none).
