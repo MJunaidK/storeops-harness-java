@@ -71,6 +71,14 @@ If the build stops early (e.g. Checkstyle fails in `validate`), the later sub-ga
 - **CONDITIONAL PASS:** the failed C and M checks, listed as conditions.
 - **PASS:** failed M checks, listed as notes.
 
-## Worked example (Sprint 1, iteration 1)
+## Worked example (invented code — not from this codebase)
 
-Integrity PASS; all sub-gates PASS; SC-2 FAIL (B: `bulkUpdateWithNullItemsListIsEmptyResponse` asserts 200 for input Sprint 2 must reject); TQ-4 FAIL (C: `ActivityServiceTest` asserts `updatedAt` of an immutable record against itself); CC-3 PASS (name deviation listed with D7 reason). → Step 3: B failed → **FAIL**. Functional 9/11 = 82, Architecture 100, Quality 100 → total 93 (reported, not decisive).
+A sprint adds `PATCH /api/widgets/archive`. Integrity PASS; all sub-gates PASS.
+SC-2 FAIL (B): `WidgetServiceTest.java:88` `archiveEmptyListReturnsOk` asserts 200 for an empty list,
+which the contract assigns to a later sprint (must return 400).
+TQ-4 FAIL (C): `WidgetServiceTest.java:120` asserts `w.createdAt()` equals a value read from the same
+immutable record.
+CC-3 PASS: method `updateArchiveBulk` differs from the contract's `archiveBulk`, but is listed under Known
+gaps citing the D7 write-prefix rule.
+→ Step 3: a B check failed → **FAIL**. Functional 9/11 = 82, Architecture 100, Quality 100 → total 93
+(reported, not decisive).
