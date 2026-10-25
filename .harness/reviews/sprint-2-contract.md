@@ -1,15 +1,27 @@
 # Sprint 2 contract: Whole-request validation and limits
-Spec: .harness/output/spec.md (APPROVED)   Decisions applied: DEC-2, DEC-3 (except `note`), DEC-8 (BLOCKED -> DONE)
+
+> **AMENDMENT 2026-10-24 (after Sprint 1 review)**
+>
+> - The service method is `updateStatusBulk`, not `bulkUpdateStatus` (the original name broke the D7
+>   write-prefix rule; see journal "Generator sprint 1, iteration 1").
+> - Sprint 1 placeholder behaviour is replaced in this sprint: TODO/IN_PROGRESS targets move from per-item
+>   CONFLICT to whole-request VALIDATION_ERROR, and a null/empty `updates` list moves from 200 to 400.
+> - Allowed changes to existing tests: `ActivityServiceTest#bulkUpdateWithNullItemsListIsEmptyResponse` may be
+>   rewritten to expect `ValidationError`. No other existing test may be changed.
+
+Spec: .harness/output/spec.md (APPROVED) Decisions applied: DEC-2, DEC-3 (except `note`), DEC-8 (BLOCKED -> DONE)
 
 ## Scope in / Scope out
 
 In:
+
 - On `PATCH /api/activities/bulk-status`, reject the whole request with `ValidationError` (400, code `VALIDATION_ERROR`) before any task is read or changed, when: `updates` is missing/null or empty; `updates` has more than 50 items; any `taskId` appears twice; any item has a `status` of TODO or IN_PROGRESS (service check); any item has a missing `status` or a blank/missing `taskId` (bean validation); `status` text is not a `TaskStatus` name (Jackson binding failure, mapped by the existing `GlobalExceptionHandler` to message exactly `"Malformed request"`).
 - Exactly 50 distinct items is accepted (upper boundary).
 - Coverage of the BLOCKED -> DONE transition (implemented in Sprint 1).
 - No task update, no `TaskStatusChangedEvent` for a rejected request.
 
 Out (unchanged, do not fix):
+
 - `note` field and its 500-character limit, audit entries and endpoint: Sprint 3.
 - `GlobalExceptionHandler` is not modified; its existing mappings are relied upon.
 - Baseline gaps unchanged as in Sprint 1 (not store-scoped, existing PATCH unchanged, no `Clock`, events synchronous, etc.).
