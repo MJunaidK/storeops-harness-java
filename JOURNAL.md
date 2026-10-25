@@ -256,3 +256,9 @@
   but `pom.xml` has `failOnViolation=true` + `violationSeverity=warning` → every warning is a violation.
 - Lesson: the rule file alone suggested Checkstyle was a soft gate; only the plugin config showed it is a hard
   gate. Verify a gate by reading all of its configuration and by breaking it.
+
+### 2026-10-24 — Usage before Sprint 1
+
+- Planner ≈ 74% of 24h usage (3 runs: spec v1, spec v2, contracts); weekly 21% used before Sprint 1.
+- Claude Code suggested a cheaper model for planner — not applied: spec quality drives every later sprint.
+  Revisit after the run with real numbers (D3).
