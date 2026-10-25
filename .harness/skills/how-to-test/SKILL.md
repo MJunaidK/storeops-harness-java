@@ -51,7 +51,8 @@ A test that stops after step 1 does not count as testing an AC.
 
 - Assert only the status code. Existing examples of this weakness — do not copy: `listWithSeededUserReturnsOk`, `patchUnknownTaskIsNotFound`, `deleteUnknownTaskIsNotFound`.
 - Assert only `isNotNull()` / `isNotEmpty()` where the AC gives an exact value.
-- Modify, delete, `@Disabled` or weaken an existing test to make the build pass; existing tests may change only where the contract explicitly allows it (e.g. constructor wiring).
+- Weaken a protected test to make the build pass (see architecture-principles "Protected tests"). Protected
+  tests change only where the sprint contract explicitly allows it (e.g. constructor wiring).
 - Mock the class under test, use `Thread.sleep`, or depend on test execution order.
 - Add tests that exist only to raise coverage without asserting behaviour.
 

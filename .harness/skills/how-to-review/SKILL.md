@@ -19,7 +19,9 @@ Make the review repeatable: two reviews of the same code must give the same answ
 ## Steps
 
 1. **Run the gates yourself:** `./mvnw verify` exactly as written — no pipes, no `-q`, no `-D` flags. Record the `BUILD …` line, the `Tests run:` totals, the `ArchitectureTest` test count, and the first failing gate if any.
-2. **Collect the diff** against the base the orchestrator gives (default `main`): `git diff <base> --stat`, `git diff <base>` and `git status` (new, untracked files count too). Use only read-only git commands.
+2. **Collect the diff** against the base the orchestrator gives (default `main`), working tree included:
+   `git diff --merge-base <base> --stat`, `git diff --merge-base <base>` and `git status` (new, untracked
+   files count too). Use only read-only git commands.
 3. **Answer every check below**, in order. A check that cannot apply (e.g. no controller changed) is PASS with evidence "not applicable: <reason>".
 4. Write the results to `evaluator-feedback.md` (format in `evaluator.agent.md`), then apply `grading-criteria`.
 
@@ -68,7 +70,9 @@ Each check is written as its **PASS condition**; anything else is FAIL.
 ### GI — Gate integrity
 
 - **GI-1** The diff does not change `ArchitectureTest.java`, the checkstyle/spotbugs/jacoco/surefire configuration in `pom.xml`, or `config/` files.
-- **GI-2** No existing test is deleted, `@Disabled`, renamed, or has an assertion removed or loosened — except changes the contract (or its amendment) explicitly allows.
+- **GI-2** `git diff --merge-base <base> -- src/test` contains no removed (`-`) line in protected test code
+  (definition and rule: architecture-principles "Protected tests"), except changes the contract or its
+  amendment names explicitly. Evidence: "no `-` lines", or each `-` line with the contract line that allows it.
 - **GI-3** No skip mechanism is added anywhere (`skipTests`, `<skip>`, JaCoCo `<excludes>`, a SpotBugs exclude file, `@SuppressWarnings` for SpotBugs) unless the contract allows it.
 
 ### SH — Honesty of the generator summary
