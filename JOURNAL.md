@@ -301,3 +301,24 @@
   rule (grading-criteria).
 - `sprint-1` branch kept unmerged until the Evaluator agent has run on it (demo needs evaluator-feedback.md
   and run-log.md from the agents).
+
+  ### D12 · 2026-10-25 — Severity per review check; SC-2 is blocking
+
+- **Decision:** Every how-to-review check has a fixed severity (B → FAIL, C → at most CONDITIONAL PASS,
+  M → score only). Scope-out tests (SC-2) are blocking.
+- **Alternatives:** Reviewer judgement per finding (my manual Sprint 1 verdict: CONDITIONAL PASS).
+- **Rationale:** The same Sprint 1 findings gave CONDITIONAL PASS by hand and FAIL by my first written marks —
+  proof that unwritten judgement is not deterministic. Scope-out tests lock in behaviour a later sprint must
+  change, forcing an edit to an existing test (forbidden by GI-2); the fix is cheap, so block it early.
+- **Assumption:** Blocking findings are fixable within 3 iterations; if SC-2 causes repeated FAILs, revisit.
+
+### D13 · 2026-10-25 — Severity decides the verdict; the weighted score measures trend
+
+- **Decision:** Verdict = integrity → hard sub-gates → B checks → C checks; weighted score (Arch 40 /
+  Functional 40 / Quality 20) is reported every time, and total < 80 caps the verdict at CONDITIONAL PASS.
+- **Alternatives:** Score-only verdict (PASS ≥ 80, CONDITIONAL 65–79, FAIL < 65), as in many rubrics.
+- **Rationale:** A score-only rule lets many small passes hide one serious failure (e.g. a scope-out test);
+  severities make serious findings decisive regardless of totals. The score still gives the Monitor a
+  comparable number per sprint for trend notes.
+- **Assumption:** With only one M check (TQ-5) the 80 threshold cannot trigger today (worst case 96); it
+  becomes active only if more M checks are added. Revisit if the checklist grows.
