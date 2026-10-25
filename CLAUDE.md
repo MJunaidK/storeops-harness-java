@@ -40,15 +40,77 @@ subagent of that name and passing only the inputs listed below — never the con
 5. `APPROVED` → start **planner** run 2. It sets `STATUS: APPROVED` and writes one
    `.harness/output/sprint-<N>-contract.md` per sprint. Then copy `spec.md` to
    `.harness/reviews/spec-approved.md` and each contract to `.harness/reviews/sprint-<N>-contract.md`.
-6. For each sprint in order: **generator** → **evaluator**, repeated per the routing rules below.
-7. After each sprint's final verdict (or escalation): archive that sprint's `generator-summary.md` and
-   `evaluator-feedback.md` to `.harness/reviews/` as `sprint-<N>-generator-summary.md` and
-   `sprint-<N>-evaluator-feedback.md`, then start **monitor**.
+6. For each sprint `<N>` in order: if branch `sprint-<N>` exists, `git switch sprint-<N>`; otherwise
+   `git switch -c sprint-<N> main`. Then run iterations as described in "Routing" until the sprint is done or escalated.
+7. After the last sprint: tell the developer the run is complete, list the files in `.harness/reviews/`,
+   and remind them to review `git log --oneline main` and push. The orchestrator never pushes.
 8. After the last sprint: tell the developer the run is complete and list the files in `.harness/reviews/`.
 
 Never start the Generator while `spec.md` does not begin with `STATUS: APPROVED`.
 
-## Routing, iteration limit, escalation ← TODO (Phase 4)
+## Routing, iteration limit, escalation
+
+### One iteration
+
+The iteration number `<i>` = the number of `.harness/reviews/sprint-<N>-iter-*-evaluator-feedback.md` files + 1.
+The maximum is 3.
+
+1. On `sprint-<N>`: `git merge main` (keeps harness files current; D15). On a conflict: `git merge --abort`, escalate (E3).
+2. Start **generator** with `<N>` and `<i>`; for `<i>` > 1, also the instruction to read `evaluator-feedback.md`.
+3. Start **evaluator** with `<N>`, `<i>` and diff base `main`.
+4. Read the first line of `.harness/output/evaluator-feedback.md`. It must be exactly `VERDICT: PASS`,
+   `VERDICT: CONDITIONAL PASS` or `VERDICT: FAIL`. Otherwise, start the evaluator once more with the same inputs
+   (not a new iteration). If the line is still invalid, escalate (E2).
+5. Archive: copy `generator-summary.md` and `evaluator-feedback.md` to `.harness/reviews/` as
+   `sprint-<N>-iter-<i>-generator-summary.md` and `sprint-<N>-iter-<i>-evaluator-feedback.md`.
+6. Commit on `sprint-<N>`: `git add src .harness/reviews`, then `git commit -m "sprint-<N> iter-<i>: <VERDICT>"`.
+7. Route by the table below.
+
+### Routing
+
+| Verdict          | Iteration | Next action                                                                        |
+| ---------------- | --------- | ---------------------------------------------------------------------------------- |
+| PASS             | any       | Sprint done                                                                        |
+| CONDITIONAL PASS | any       | Sprint done; the conditions are recorded in the run log, not sent to the Generator |
+| FAIL             | 1 or 2    | Next iteration                                                                     |
+| FAIL             | 3         | Escalate (E1)                                                                      |
+
+### Sprint done
+
+1. `git switch main`, then `git merge --no-ff sprint-<N> -m "merge sprint-<N>: <VERDICT>"`.
+   On a conflict: `git merge --abort`, `git switch sprint-<N>`, escalate (E3).
+2. Start **monitor** with `<N>`, iterations used, final verdict, escalation flag `false`.
+   Commit its run log on `main`: `git commit -m "sprint-<N> run log"`.
+3. If another sprint follows: `git switch -c sprint-<N+1> main` and start its first iteration.
+
+### Escalation
+
+Triggers: **E1** the 3rd iteration ends in FAIL · **E2** the verdict line is invalid twice · **E3** a git step fails.
+
+1. Write `.harness/output/escalation.md`:
+
+   ```
+   ESCALATION: Sprint <N>
+   Trigger: <E1 | E2 | E3> — <one line: what happened>
+   Iterations used: <i> of 3 · Last verdict: <verdict or "unreadable">
+   ## Blocking findings
+   (copied from the last evaluator-feedback.md "Must fix": check ID, file:line, what is required)
+   ## What each iteration changed
+   (per iteration: the "Feedback addressed" rows from its generator summary)
+   ## Developer options
+   - RETRY: one more iteration (raises this sprint's limit by 1; note it in JOURNAL.md)
+   - AMEND: the developer edits the contract (AMENDMENT block at the top), then RETRY
+   - STOP: end the run; sprint-<N> stays unmerged
+   ```
+
+2. Copy it to `.harness/reviews/sprint-<N>-escalation.md` and commit it on `sprint-<N>`.
+3. Start **monitor** with escalation flag `true`.
+4. Show the developer the trigger and the blocking findings, then wait for RETRY, AMEND or STOP. Never merge an escalated sprint.
+
+### Git rules for the orchestrator
+
+Allowed: `git status`, `diff`, `log`, `add`, `commit`, `switch`, `merge`, `merge --abort`.
+Never: `push`, `reset`, `rebase`, `--force`, deleting branches, or resolving a merge conflict yourself (D16).
 
 ## Context strategy ← TODO
 
