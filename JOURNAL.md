@@ -263,6 +263,13 @@
 - Claude Code suggested a cheaper model for planner — not applied: spec quality drives every later sprint.
   Revisit after the run with real numbers (D3).
 
+### 2026-10-24 — Usage after Sprint 1
+
+- Weekly 21% → 22% (≈ 1% for Generator sprint 1, iteration 1); session window ≈ 7%; $0.86 API-equivalent; ~20 min.
+- 24h share by subagent: planner 46%, generator 34%. Planner (3 runs) cost more than one Generator iteration.
+- D3 revisit: keep Sonnet for both. Cost is low enough that a cheaper planner model is not worth the risk to
+  spec quality; 3 sprints with retries fit comfortably before the weekly reset.
+
 ### 2026-10-24 — Generator sprint 1, iteration 1 (19m 47s; reports verify green, 78 tests)
 
 - Wrote/edited Java via Bash heredocs + a Python script instead of Write/Edit → hidden from accept-edits
@@ -280,3 +287,17 @@
   Sprint 2 must change an existing test. → Evaluator check: tests must not assert Scope-out behaviour.
 - Approved each `./mvnw verify` prompt individually; did not use "don't ask again for ./mvnw verify \*"
   (the wildcard would also allow -DskipTests).
+
+  ### 2026-10-24 — Sprint 1 manual evaluation (before the Evaluator exists)
+
+- Re-ran `.\mvnw.cmd verify` myself: BUILD SUCCESS, 78 tests, Checkstyle 0, ArchUnit 7/7, SpotBugs 0, JaCoCo met.
+  Generator's claim confirmed.
+- Cost of Sprint 1: see "Usage after Sprint 1".
+- Findings: F1 method name (contract wrong — amend), F2 scope-out placeholder behaviour + test (amend Sprint 2
+  contract), F3 tautological `updatedAt` assertion (minor; AC still proven by `never().save`), F4 process
+  (Bash edits, piped verify — generator.agent.md fixed).
+- My verdict: CONDITIONAL PASS — but I applied an unwritten rule. Another reviewer could call F2 a FAIL.
+  → Evaluator design: gates (deterministic) + yes/no checklist (how-to-review) + fixed severity and verdict
+  rule (grading-criteria).
+- `sprint-1` branch kept unmerged until the Evaluator agent has run on it (demo needs evaluator-feedback.md
+  and run-log.md from the agents).
