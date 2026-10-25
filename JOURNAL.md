@@ -262,3 +262,21 @@
 - Planner ≈ 74% of 24h usage (3 runs: spec v1, spec v2, contracts); weekly 21% used before Sprint 1.
 - Claude Code suggested a cheaper model for planner — not applied: spec quality drives every later sprint.
   Revisit after the run with real numbers (D3).
+
+### 2026-10-24 — Generator sprint 1, iteration 1 (19m 47s; reports verify green, 78 tests)
+
+- Wrote/edited Java via Bash heredocs + a Python script instead of Write/Edit → hidden from accept-edits
+  diffs, fragile, needs Python. Fix: generator.agent.md Never-list: files only via Write/Edit; Bash only
+  for ./mvnw and read-only commands.
+- Method name: contract (DEC-10) says `bulkUpdateStatus` and claims it keeps the A7 write prefix — it
+  doesn't (starts with "bulk", so A7 would not catch a call from reports). Generator used `updateStatusBulk`
+  and reported the deviation. Root cause: unverified claim in the spec, missed by Planner and by my review.
+  → Evaluator check: names in contract vs code; Planner check: new write methods must start with a D7 prefix.
+- Ran verify as `./mvnw -q verify 2>&1 | tail -40; echo exit=$?` → $? is tail's exit code, so a failed build
+  reports exit=0. Later run used `| grep … BUILD` (accurate). → Evaluator must run verify itself;
+  generator.agent.md: never pipe verify; report mvnw's own result.
+- Added test `bulkUpdateWithNullItemsListIsEmptyResponse` (null list → 200 empty) and maps TODO/IN_PROGRESS
+  targets to per-item CONFLICT — both contradict Sprint 2 (whole request → 400). Locks in Scope-out behaviour;
+  Sprint 2 must change an existing test. → Evaluator check: tests must not assert Scope-out behaviour.
+- Approved each `./mvnw verify` prompt individually; did not use "don't ask again for ./mvnw verify \*"
+  (the wildcard would also allow -DskipTests).
