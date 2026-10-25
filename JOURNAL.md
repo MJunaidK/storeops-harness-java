@@ -176,6 +176,36 @@
 - **Consequence:** A sprint's tests become protected when it merges to `main`. Who merges, and when the next
   branch is created, is still open (→ D16, CLAUDE.md routing).
 
+### D16 · 2026-10-25 — The orchestrator commits, merges and branches; it never pushes
+
+- **Decision:** After every Evaluator verdict the orchestrator commits the sprint branch (code + that iteration's
+  archives, verdict in the message). On PASS or CONDITIONAL PASS it merges `sprint-N` into local `main` and creates
+  `sprint-<N+1>` from `main`. It never pushes; the developer pushes after the run. On escalation: no merge.
+- **Alternatives:** (b) the developer merges after every sprint: a human check before main, but a manual step the
+  PDF excludes (§2.1). (c) merge once at the end: Sprint 2 could weaken Sprint 1's tests, because tests become
+  protected only on `main` (D15).
+- **Rationale:** The loop stays autonomous; the Evaluator verdict is the gate before `main`; the push is the human
+  checkpoint before the remote and CI. Per-iteration commits make FAIL → fix visible in history and expose changes
+  to sprint-owned tests (D15 blind spot).
+- **Assumption:** A local `main` that is not yet pushed can be reset if a run goes wrong. The main session is allowed
+  only specific git commands, never push or reset.
+- **Consequence:** Archives are committed on the sprint branch and reach `main` by merge; how-to-review step 2
+  excludes `.harness/reviews` from the review diff. (Supersedes "archives live on main" from the 2026-10-25 log.)
+
+### D17 · 2026-10-25 — Routing rules: CONDITIONAL PASS advances; unreadable verdict gets one re-run; three escalation triggers
+
+- **Decision:** PASS and CONDITIONAL PASS end the sprint (merge); FAIL retries up to iteration 3. The iteration
+  number is counted from the archived feedback files. An invalid verdict line triggers one Evaluator re-run, then
+  escalation. Escalation triggers: E1 3rd FAIL, E2 verdict invalid twice, E3 a git step fails.
+  escalation.md offers the developer RETRY / AMEND / STOP.
+- **Alternatives:** CONDITIONAL PASS sent back to the Generator (C findings become blocking in practice, contradicting
+  D12); an invalid verdict treated as FAIL (the Generator would get broken feedback); iteration count kept in the
+  session (lost when the session restarts).
+- **Rationale:** Every routing input is a fact the orchestrator can read (first line, file count, git exit status),
+  so the same files always give the same next step.
+- **Assumption:** The Evaluator writes the verdict line correctly almost every time, so E2 is rare. Contract
+  amendments stay a developer action; the orchestrator never edits contracts.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)

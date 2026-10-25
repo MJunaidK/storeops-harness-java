@@ -19,9 +19,10 @@ Make the review repeatable: two reviews of the same code must give the same answ
 ## Steps
 
 1. **Run the gates yourself:** `./mvnw verify` exactly as written — no pipes, no `-q`, no `-D` flags. Record the `BUILD …` line, the `Tests run:` totals, the `ArchitectureTest` test count, and the first failing gate if any.
-2. **Collect the diff** against the base the orchestrator gives (default `main`), working tree included:
-   `git diff --merge-base <base> --stat`, `git diff --merge-base <base>` and `git status` (new, untracked
-   files count too). Use only read-only git commands.
+2. **Collect the diff** against the base the orchestrator gives (default `main`), working tree included, without
+   the orchestrator's archives: `git diff --merge-base <base> --stat -- . ":(exclude).harness/reviews"`,
+   `git diff --merge-base <base> -- . ":(exclude).harness/reviews"` and `git status` (new, untracked files count too).
+   Use only read-only git commands.
 3. **Answer every check below**, in order. A check that cannot apply (e.g. no controller changed) is PASS with evidence "not applicable: <reason>".
 4. Write the results to `evaluator-feedback.md` (format in `evaluator.agent.md`), then apply `grading-criteria`.
 
