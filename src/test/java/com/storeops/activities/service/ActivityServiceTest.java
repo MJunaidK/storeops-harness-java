@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.storeops.activities.dto.BulkStatusItem;
+import com.storeops.activities.dto.BulkStatusRequest;
+import com.storeops.activities.dto.BulkStatusResponse;
 import com.storeops.activities.dto.CreateTaskRequest;
 import com.storeops.activities.dto.UpdateTaskRequest;
 import com.storeops.activities.model.Task;
@@ -151,5 +155,172 @@ class ActivityServiceTest {
 
         assertThatThrownBy(() -> service.delete(OTHER, "t1")).isInstanceOf(ForbiddenError.class);
         verify(taskRepository, never()).deleteById(any());
+    }
+
+    private Task bulkTask(String id, String ownerId, String assigneeId, TaskStatus status) {
+        Instant created = Instant.parse("2026-01-01T00:00:00Z");
+        return new Task(id, "p1", "Title " + id, "d", status, TaskPriority.HIGH, TaskCategory.AUDIT, assigneeId, ownerId, null,
+            created, created);
+    }
+
+    private BulkStatusRequest bulk(BulkStatusItem... items) {
+        return new BulkStatusRequest(List.of(items));
+    }
+
+    // AC-1.1
+    @Test
+    void bulkUpdateMixedItemsUpdatesAllAndEmitsTwoEvents() {
+        Task t1 = bulkTask("T-1", "m1", "u1", TaskStatus.TODO);
+        Task t2 = bulkTask("T-2", "m1", "u1", TaskStatus.IN_PROGRESS);
+        when(taskRepository.findById("T-1")).thenReturn(Optional.of(t1));
+        when(taskRepository.findById("T-2")).thenReturn(Optional.of(t2));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+        AuthenticatedUser assignee = new AuthenticatedUser("u1", "s1", StaffRole.ASSOCIATE);
+
+        BulkStatusResponse response = service.updateStatusBulk(assignee,
+            bulk(new BulkStatusItem("T-1", TaskStatus.DONE), new BulkStatusItem("T-2", TaskStatus.BLOCKED)));
+
+        assertThat(response.updatedCount()).isEqualTo(2);
+        assertThat(response.failedCount()).isZero();
+        assertThat(response.results()).hasSize(2);
+        assertThat(response.results().get(0).taskId()).isEqualTo("T-1");
+        assertThat(response.results().get(0).success()).isTrue();
+        assertThat(response.results().get(0).status()).isEqualTo("DONE");
+        assertThat(response.results().get(0).errorCode()).isNull();
+        assertThat(response.results().get(0).message()).isNull();
+        assertThat(response.results().get(1).taskId()).isEqualTo("T-2");
+        assertThat(response.results().get(1).status()).isEqualTo("BLOCKED");
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(0).status()).isEqualTo(TaskStatus.DONE);
+        assertThat(saved.getAllValues().get(1).status()).isEqualTo(TaskStatus.BLOCKED);
+        for (Task s : saved.getAllValues()) {
+            assertThat(s.assigneeId()).isEqualTo("u1");
+            assertThat(s.priority()).isEqualTo(TaskPriority.HIGH);
+            assertThat(s.category()).isEqualTo(TaskCategory.AUDIT);
+        }
+        ArgumentCaptor<TaskStatusChangedEvent> events = ArgumentCaptor.forClass(TaskStatusChangedEvent.class);
+        verify(eventBus, times(2)).emit(events.capture());
+        assertThat(events.getAllValues().get(0).taskId()).isEqualTo("T-1");
+        assertThat(events.getAllValues().get(0).oldStatus()).isEqualTo("TODO");
+        assertThat(events.getAllValues().get(0).newStatus()).isEqualTo("DONE");
+        assertThat(events.getAllValues().get(1).taskId()).isEqualTo("T-2");
+        assertThat(events.getAllValues().get(1).oldStatus()).isEqualTo("IN_PROGRESS");
+        assertThat(events.getAllValues().get(1).newStatus()).isEqualTo("BLOCKED");
+    }
+
+    // AC-1.2
+    @Test
+    void bulkUpdateMissingTaskFailsOnlyItsOwnItem() {
+        when(taskRepository.findById("T-404")).thenReturn(Optional.empty());
+        when(taskRepository.findById("T-1")).thenReturn(Optional.of(bulkTask("T-1", "m1", "u1", TaskStatus.TODO)));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER,
+            bulk(new BulkStatusItem("T-404", TaskStatus.DONE), new BulkStatusItem("T-1", TaskStatus.DONE)));
+
+        assertThat(response.updatedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(response.results().get(0).taskId()).isEqualTo("T-404");
+        assertThat(response.results().get(0).success()).isFalse();
+        assertThat(response.results().get(0).status()).isNull();
+        assertThat(response.results().get(0).errorCode()).isEqualTo("NOT_FOUND");
+        assertThat(response.results().get(0).message()).isEqualTo("Task not found: T-404");
+        assertThat(response.results().get(1).success()).isTrue();
+        assertThat(response.results().get(1).status()).isEqualTo("DONE");
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(saved.capture());
+        assertThat(saved.getValue().id()).isEqualTo("T-1");
+        assertThat(saved.getValue().status()).isEqualTo(TaskStatus.DONE);
+        ArgumentCaptor<TaskStatusChangedEvent> events = ArgumentCaptor.forClass(TaskStatusChangedEvent.class);
+        verify(eventBus).emit(events.capture());
+        assertThat(events.getValue().taskId()).isEqualTo("T-1");
+    }
+
+    // AC-1.3
+    @Test
+    void bulkUpdateByUnrelatedAssociateIsForbiddenPerItem() {
+        when(taskRepository.findById("T-1")).thenReturn(Optional.of(bulkTask("T-1", "lead", "lead", TaskStatus.TODO)));
+        AuthenticatedUser stranger = new AuthenticatedUser("assoc", "s1", StaffRole.ASSOCIATE);
+
+        BulkStatusResponse response = service.updateStatusBulk(stranger, bulk(new BulkStatusItem("T-1", TaskStatus.DONE)));
+
+        assertThat(response.updatedCount()).isZero();
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(response.results().get(0).taskId()).isEqualTo("T-1");
+        assertThat(response.results().get(0).success()).isFalse();
+        assertThat(response.results().get(0).status()).isEqualTo("TODO");
+        assertThat(response.results().get(0).errorCode()).isEqualTo("FORBIDDEN");
+        assertThat(response.results().get(0).message()).isNotEmpty();
+        verify(taskRepository, never()).save(any());
+        verify(eventBus, never()).emit(any());
+    }
+
+    // AC-1.4
+    @Test
+    void bulkUpdateByStoreManagerSucceedsOnForeignTask() {
+        when(taskRepository.findById("T-3")).thenReturn(Optional.of(bulkTask("T-3", "lead", "lead", TaskStatus.TODO)));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER, bulk(new BulkStatusItem("T-3", TaskStatus.BLOCKED)));
+
+        assertThat(response.updatedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isZero();
+        assertThat(response.results().get(0).taskId()).isEqualTo("T-3");
+        assertThat(response.results().get(0).success()).isTrue();
+        assertThat(response.results().get(0).status()).isEqualTo("BLOCKED");
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(saved.capture());
+        assertThat(saved.getValue().status()).isEqualTo(TaskStatus.BLOCKED);
+        ArgumentCaptor<TaskStatusChangedEvent> events = ArgumentCaptor.forClass(TaskStatusChangedEvent.class);
+        verify(eventBus).emit(events.capture());
+        assertThat(events.getValue().taskId()).isEqualTo("T-3");
+        assertThat(events.getValue().oldStatus()).isEqualTo("TODO");
+        assertThat(events.getValue().newStatus()).isEqualTo("BLOCKED");
+    }
+
+    // AC-1.5
+    @Test
+    void bulkUpdateOfDoneTaskIsConflict() {
+        when(taskRepository.findById("T-1")).thenReturn(Optional.of(bulkTask("T-1", "m1", "u1", TaskStatus.DONE)));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER, bulk(new BulkStatusItem("T-1", TaskStatus.BLOCKED)));
+
+        assertThat(response.updatedCount()).isZero();
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(response.results().get(0).success()).isFalse();
+        assertThat(response.results().get(0).status()).isEqualTo("DONE");
+        assertThat(response.results().get(0).errorCode()).isEqualTo("CONFLICT");
+        assertThat(response.results().get(0).message()).isNotEmpty();
+        verify(taskRepository, never()).save(any());
+        verify(eventBus, never()).emit(any());
+    }
+
+    // AC-1.6
+    @Test
+    void bulkUpdateToCurrentStatusIsConflictAndLeavesUpdatedAtUnchanged() {
+        when(taskRepository.findById("T-2")).thenReturn(Optional.of(bulkTask("T-2", "m1", "u1", TaskStatus.BLOCKED)));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER, bulk(new BulkStatusItem("T-2", TaskStatus.BLOCKED)));
+
+        assertThat(response.updatedCount()).isZero();
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(response.results().get(0).success()).isFalse();
+        assertThat(response.results().get(0).status()).isEqualTo("BLOCKED");
+        assertThat(response.results().get(0).errorCode()).isEqualTo("CONFLICT");
+        assertThat(response.results().get(0).message()).isNotEmpty();
+        verify(taskRepository, never()).save(any());
+        verify(eventBus, never()).emit(any());
+    }
+
+    @Test
+    void bulkUpdateAllowsBlockedToDone() {
+        when(taskRepository.findById("T-2")).thenReturn(Optional.of(bulkTask("T-2", "m1", "u1", TaskStatus.BLOCKED)));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER, bulk(new BulkStatusItem("T-2", TaskStatus.DONE)));
+
+        assertThat(response.updatedCount()).isEqualTo(1);
+        assertThat(response.results().get(0).status()).isEqualTo("DONE");
     }
 }

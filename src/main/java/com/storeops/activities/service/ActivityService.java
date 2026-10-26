@@ -1,5 +1,9 @@
 package com.storeops.activities.service;
 
+import com.storeops.activities.dto.BulkStatusItem;
+import com.storeops.activities.dto.BulkStatusRequest;
+import com.storeops.activities.dto.BulkStatusResponse;
+import com.storeops.activities.dto.BulkStatusResult;
 import com.storeops.activities.dto.CreateTaskRequest;
 import com.storeops.activities.dto.UpdateTaskRequest;
 import com.storeops.activities.model.Task;
@@ -7,6 +11,8 @@ import com.storeops.activities.model.TaskCategory;
 import com.storeops.activities.model.TaskPriority;
 import com.storeops.activities.model.TaskStatus;
 import com.storeops.activities.repository.TaskRepository;
+import com.storeops.shared.error.AppError;
+import com.storeops.shared.error.ConflictError;
 import com.storeops.shared.error.ForbiddenError;
 import com.storeops.shared.error.NotFoundError;
 import com.storeops.shared.event.EventBus;
@@ -16,6 +22,7 @@ import com.storeops.shared.security.AuthenticatedUser;
 import com.storeops.staff.model.StaffRole;
 import com.storeops.staff.service.StaffService;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -78,5 +85,51 @@ public class ActivityService {
             throw new ForbiddenError("Only the task owner or a store manager can delete a task");
         }
         taskRepository.deleteById(task.id());
+    }
+
+    public BulkStatusResponse updateStatusBulk(AuthenticatedUser caller, BulkStatusRequest request) {
+        List<BulkStatusResult> results = new ArrayList<>();
+        int updated = 0;
+        for (BulkStatusItem item : request.updates()) {
+            BulkStatusResult result = updateOneStatus(caller, item);
+            if (result.success()) {
+                updated++;
+            }
+            results.add(result);
+        }
+        return new BulkStatusResponse(updated, results.size() - updated, results);
+    }
+
+    private BulkStatusResult updateOneStatus(AuthenticatedUser caller, BulkStatusItem item) {
+        Task existing = null;
+        try {
+            existing = get(item.taskId());
+            boolean permitted = caller.role() == StaffRole.STORE_MANAGER
+                || caller.id().equals(existing.assigneeId())
+                || caller.id().equals(existing.ownerId());
+            if (!permitted) {
+                throw new ForbiddenError("Only the assignee, the owner or a store manager can change the status of task "
+                    + existing.id());
+            }
+            if (!isAllowedTransition(existing.status(), item.status())) {
+                throw new ConflictError("Cannot change task " + existing.id() + " from " + existing.status() + " to "
+                    + item.status());
+            }
+            Instant now = Instant.now();
+            Task updated = taskRepository.save(existing.withChanges(item.status(), null, null, null, now));
+            eventBus.emit(new TaskStatusChangedEvent(updated.id(), updated.title(), updated.ownerId(), updated.assigneeId(),
+                existing.status().name(), updated.status().name(), now));
+            return new BulkStatusResult(item.taskId(), true, updated.status().name(), null, null);
+        } catch (AppError error) {
+            String current = existing == null ? null : existing.status().name();
+            return new BulkStatusResult(item.taskId(), false, current, error.getCode(), error.getMessage());
+        }
+    }
+
+    private boolean isAllowedTransition(TaskStatus from, TaskStatus to) {
+        if (to != TaskStatus.DONE && to != TaskStatus.BLOCKED) {
+            return false;
+        }
+        return from == TaskStatus.TODO || from == TaskStatus.IN_PROGRESS || (from == TaskStatus.BLOCKED && to == TaskStatus.DONE);
     }
 }

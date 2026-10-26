@@ -1,5 +1,7 @@
 package com.storeops.activities.controller;
 
+import com.storeops.activities.dto.BulkStatusRequest;
+import com.storeops.activities.dto.BulkStatusResponse;
 import com.storeops.activities.dto.CreateTaskRequest;
 import com.storeops.activities.dto.UpdateTaskRequest;
 import com.storeops.activities.model.Task;
@@ -45,6 +47,11 @@ public class ActivityController {
     @GetMapping("/{id}")
     public Task get(AuthenticatedUser caller, @PathVariable String id) {
         return activityService.get(id);
+    }
+
+    @PatchMapping("/bulk-status")
+    public BulkStatusResponse updateStatusBulk(AuthenticatedUser caller, @Valid @RequestBody BulkStatusRequest request) {
+        return activityService.updateStatusBulk(caller, request);
     }
 
     @PatchMapping("/{id}")
