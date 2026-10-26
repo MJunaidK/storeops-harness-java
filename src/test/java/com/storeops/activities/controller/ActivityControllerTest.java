@@ -291,4 +291,117 @@ class ActivityControllerTest {
             .andExpect(jsonPath("$.results[0].message").isNotEmpty());
         assertTaskStatus(t1, "DONE");
     }
+
+    private ResultActions rawBulkPatch(String body) throws Exception {
+        return mvc.perform(patch("/api/activities/bulk-status").header("X-User-Id", MANAGER)
+            .contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    private void assertRejected(String t1, ResultActions result, String message) throws Exception {
+        result.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+            .andExpect(message == null ? jsonPath("$.message").isNotEmpty() : jsonPath("$.message").value(message));
+        assertTaskStatus(t1, "TODO");
+    }
+
+    // AC-2.2
+    @Test
+    void bulkStatusToInProgressRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, bulkPatch(MANAGER, item(t1, "IN_PROGRESS")), null);
+    }
+
+    // AC-2.2
+    @Test
+    void bulkStatusToTodoRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, bulkPatch(MANAGER, item(t1, "TODO")), null);
+    }
+
+    // AC-2.3
+    @Test
+    void bulkStatusWithUnknownStatusTextIsMalformedRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, bulkPatch(MANAGER, item(t1, "FINISHED")), "Malformed request");
+    }
+
+    // AC-2.4
+    @Test
+    void bulkStatusWithMissingStatusRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, rawBulkPatch("{\"updates\":[{\"taskId\":\"" + t1 + "\"}]}"), null);
+    }
+
+    // AC-2.4
+    @Test
+    void bulkStatusWithBlankTaskIdRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, rawBulkPatch("{\"updates\":[{\"taskId\":\"\",\"status\":\"DONE\"}]}"), null);
+    }
+
+    // AC-2.5
+    @Test
+    void bulkStatusWithEmptyUpdatesRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, rawBulkPatch("{\"updates\":[]}"), null);
+    }
+
+    // AC-2.5
+    @Test
+    void bulkStatusWithMissingUpdatesRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, rawBulkPatch("{}"), null);
+    }
+
+    // AC-2.5
+    @Test
+    void bulkStatusWith51ItemsRejectsWholeRequest() throws Exception {
+        String programme = "p-" + UUID.randomUUID();
+        String t1 = createTask(MANAGER, programme, "One", "");
+        String[] items = new String[51];
+        items[0] = item(t1, "DONE");
+        for (int i = 1; i < 51; i++) {
+            items[i] = item("T-extra-" + i + "-" + UUID.randomUUID(), "DONE");
+        }
+
+        assertRejected(t1, bulkPatch(MANAGER, items), null);
+    }
+
+    // AC-2.5
+    @Test
+    void bulkStatusWithExactly50ItemsIsAccepted() throws Exception {
+        String programme = "p-" + UUID.randomUUID();
+        String[] items = new String[50];
+        String[] ids = new String[50];
+        for (int i = 0; i < 50; i++) {
+            ids[i] = createTask(MANAGER, programme, "Task " + i, "");
+            items[i] = item(ids[i], "DONE");
+        }
+
+        bulkPatch(MANAGER, items)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.updatedCount").value(50))
+            .andExpect(jsonPath("$.failedCount").value(0))
+            .andExpect(jsonPath("$.results", hasSize(50)))
+            .andExpect(jsonPath("$.results[0].taskId").value(ids[0]))
+            .andExpect(jsonPath("$.results[49].taskId").value(ids[49]))
+            .andExpect(jsonPath("$.results[49].success").value(true));
+        assertTaskStatus(ids[0], "DONE");
+        assertTaskStatus(ids[49], "DONE");
+    }
+
+    // AC-2.6
+    @Test
+    void bulkStatusWithDuplicateTaskIdRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, bulkPatch(MANAGER, item(t1, "DONE"), item(t1, "BLOCKED")), null);
+    }
 }
