@@ -1,0 +1,63 @@
+CONTAINER ID   IMAGE             COMMAND               CREATED         STATUS         PORTS                    NAMES
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> $a = Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/activities -Headers @{'X-User-Id'='u-manager'} -ContentType 'application/json' -Body '{"programmeId":"p-demo","title":"Restock aisle 4","priority":"HIGH","category":"RESTOCKING","assigneeId":"u-associate"}'
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> docker ps                                                                                                                   
+CONTAINER ID   IMAGE             COMMAND               CREATED          STATUS          PORTS                    NAMES                               
+2ff792bf1e45   storeops:latest   "java -jar app.jar"   11 minutes ago   Up 10 minutes   0.0.0.0:8080->8080/tcp   storeops-harness-java-storeops-1
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> $b = Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/activities -Headers @{'X-User-Id'='u-lead'} -ContentType 
+'application/json' -Body '{"programmeId":"p-demo","title":"Planogram reset bay 2","priority":"MEDIUM","category":"PLANOGRAM","assigneeId":"u-lead"}'
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> docker ps                                                                                                                   
+CONTAINER ID   IMAGE             COMMAND               CREATED          STATUS          PORTS                    NAMES                              
+2ff792bf1e45   storeops:latest   "java -jar app.jar"   11 minutes ago   Up 11 minutes   0.0.0.0:8080->8080/tcp   storeops-harness-java-storeops-1
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> $a.id; $b.id
+96f8e223-aa4e-4307-95d7-7398909dfa34
+826bcff6-14d2-4f06-ba30-3d5280ce6f22
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> $bulk = "$env:TEMP\bulk.json"
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> Set-Content -Encoding ascii $bulk ('{"updates":[{"taskId":"' + $a.id + '","status":"DONE","note":"Finished on shift"},{"taskId":"' + $b.id + '","status":"DONE"},{"taskId":"T-404","status":"BLOCKED"}]}')
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> curl.exe -s -i -X PATCH http://localhost:8080/api/activities/bulk-status -H "X-User-Id: u-associate" -H "Content-Type: application/json" --data "@$bulk"
+HTTP/1.1 200 
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Mon, 26 Oct 2026 19:14:42 GMT
+
+{"updatedCount":1,"failedCount":2,"results":[{"taskId":"96f8e223-aa4e-4307-95d7-7398909dfa34","success":true,"status":"DONE","errorCode":null,"message":null},{"taskId":"826bcff6-14d2-4f06-ba30-3d5280ce6f22","success":false,"status":"TODO","errorCode":"FORBIDDEN","message":"Only the assignee, the owner or a store manager can change the status of task 826bcff6-14d2-4f06-ba30-3d5280ce6f22"},{"taskId":"T-404","success":false,"status":null,"errorCode":"NOT_FOUND","message":"Task not found: T-404"}]}
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> docker ps
+CONTAINER ID   IMAGE             COMMAND               CREATED          STATUS          PORTS                    NAMES
+2ff792bf1e45   storeops:latest   "java -jar app.jar"   13 minutes ago   Up 13 minutes   0.0.0.0:8080->8080/tcp   storeops-harness-java-storeops-1
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> curl.exe -s -i -H "X-User-Id: u-manager" "http://localhost:8080/api/activities/$($a.id)/audit"
+HTTP/1.1 200 
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Mon, 26 Oct 2026 19:15:20 GMT
+
+[{"id":"6c13e4ab-3651-45e1-993c-b8ab58bf1be2","taskId":"96f8e223-aa4e-4307-95d7-7398909dfa34","actorId":"u-associate","oldStatus":"TODO","newStatus":"DONE","note":"Finished on shift","occurredAt":"2026-10-26T19:14:42.069538703Z"}]
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> curl.exe -s -i -H "X-User-Id: u-associate" "http://localhost:8080/api/activities/$($a.id)/audit"
+HTTP/1.1 403 
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Mon, 26 Oct 2026 19:16:11 GMT
+
+{"code":"FORBIDDEN","message":"Only a store manager can read the audit trail"}
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> $empty = "$env:TEMP\empty.json"
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> Set-Content -Encoding ascii $empty '{"updates":[]}'
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> curl.exe -s -i -X PATCH http://localhost:8080/api/activities/bulk-status -H "X-User-Id: u-manager" -H "Content-Type: application/json" --data "@$empty"
+HTTP/1.1 400 
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Mon, 26 Oct 2026 19:17:47 GMT
+Connection: close
+
+{"code":"VALIDATION_ERROR","message":"updates must not be empty"}
+PS C:\Junaid\2026\workspaces\claude_ws\storeops-harness-java> 
+
+
+
+
+
+
+
+
+
+
+
+
+

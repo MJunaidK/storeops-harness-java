@@ -6,7 +6,7 @@ COPY mvnw pom.xml ./
 COPY config/ config/
 RUN chmod +x mvnw && ./mvnw -q -B dependency:go-offline
 COPY src/ src/
-# Quality gates run in CI via ./mvnw verify; the image build only packages.
+# Quality gates are not run here: ./mvnw verify runs before the image is built (harness; CI when added — D19).
 RUN ./mvnw -q -B -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true -Djacoco.skip=true package \
     && mv target/storeops-*.jar target/app.jar
 
