@@ -124,6 +124,43 @@ Run one git command per call, exactly as written: no pipes (`|`), no `2>&1`, no 
 A pipe hides git's exit status, so a failed merge can look like a success (2026-10-25: `git merge main | tail`).
 Read the result from the command's own output before taking the next step.
 
-## Context strategy ← TODO
+## Context strategy
 
-## CI/CD relationship ← TODO
+Context is bounded per agent and reset between agents; state lives in files, never in a conversation.
+
+- **Fresh context per agent (D11).** Every agent is a subagent with its own empty context. It receives only the
+  inputs in the Agents table, never this conversation. The Evaluator never sees the Generator's reasoning — only
+  its files (code, `generator-summary.md`).
+- **Files are the only handoff.** spec → contract → code + summary → feedback → run log. Each agent's read list
+  is scoped in its definition: the Planner reads only the affected module; the Generator only the contract's
+  "Expected changes" files (plus feedback on a retry); the Evaluator the contract, summary and diff, with
+  `how-to-test` / `coding-conventions` as reference only; the Monitor only the archives, never code.
+- **The orchestrator keeps almost nothing.** It reads only the verdict line of `evaluator-feedback.md`, not the
+  whole file, and derives all state from the repository: the iteration number from the archive count, the sprint
+  from the branch. A session can therefore end at any point and be resumed with the resume prompt above.
+- **Reset across sprints.** Start a new session per sprint (resume prompt). A long-lived orchestrator session pays
+  to re-read its own growing context on every step (measured 2026-10-26: orchestrator ≈ 16× the cost of the
+  Haiku Monitor run; an idle session re-cached ~52k tokens on its next turn).
+- **Skill depth vs token budget.** Shared facts live once in `app-context` and `architecture-principles` so no
+  agent explores the code to learn its shape. Rules are defined once and referenced (e.g. protected tests, D15).
+  Worked examples are short and invented (D14). Model per agent: Sonnet for Planner, Generator, Evaluator;
+  Haiku for the Monitor (D18). Measured cost per agent run: 48k–80k tokens; the whole demo feature (3 sprints,
+  4 iterations) ≈ 4–5% of a weekly Pro allowance (`.harness/reviews/usage-log.md`).
+
+## CI/CD relationship
+
+The harness **precedes** CI; it does not replace it. No pipeline exists in this repository yet; this section is the contract any pipeline added later must follow.
+
+- **Same gate command.** The Evaluator's hard gates are `./mvnw verify` — the exact command CI must run (D6):
+  Checkstyle, compile, tests including ArchUnit A1–A7, JaCoCo thresholds, SpotBugs. A sprint that passed the
+  harness passes the same gates in CI unless the environment differs.
+- **The push is the hand-over.** The orchestrator never pushes (D16). The developer reviews `git log` and pushes;
+  CI must then re-run `./mvnw verify` in a clean environment and not trust the harness result.
+- **What each layer adds.** CI adds a clean build environment and covers changes made outside the harness
+  (human commits, other branches). The harness adds what CI cannot check: the Evaluator's LLM checks on test
+  quality (TQ), scope (SC), contract compliance (CC) and the architecture rules ArchUnit cannot see (AR-2 dead
+  code, AR-3 cross-module writes), plus the audit trail in `.harness/reviews/`.
+- **Separation.** Harness files live in `.harness/` and `.claude/`; pipeline configuration belongs in
+  `.github/workflows/` (or the CI tool's own folder). Neither reads the other's files.
+- **Known gap.** The Dockerfile build skips Checkstyle, SpotBugs and JaCoCo (journal 2026-10-18), so a pipeline
+  must run `./mvnw verify` before building the image; the image build alone is not a gate.

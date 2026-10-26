@@ -220,6 +220,18 @@
 - **Assumption:** Haiku reliably fills a fixed table format from structured files. If run logs come out
   incomplete or wrong, switch to Sonnet and record it.
 
+### D19 · 2026-10-26 — The harness precedes CI; CI must re-run the same gate
+
+- **Decision:** The harness runs `./mvnw verify` plus LLM checks before anything is pushed; CI must re-run
+  `./mvnw verify` on every push and not trust the harness result.
+- **Alternatives:** (a) The harness replaces CI — no clean environment, and no gate for changes made outside the
+  harness. (b) CI only, no Evaluator gates — loses the LLM checks (test quality, scope, cross-module writes) that
+  tools cannot see.
+- **Rationale:** One gate command in both places (D6) means the harness result predicts CI; CI stays the
+  authoritative, environment-independent gate. The push is the human checkpoint between them (D16).
+- **Assumption:** Local and CI environments run the same JDK and Maven wrapper version, so a harness PASS rarely
+  turns into a CI failure. No pipeline exists yet; D19 states the contract for one.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
