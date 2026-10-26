@@ -6,10 +6,12 @@ import com.storeops.activities.dto.BulkStatusResponse;
 import com.storeops.activities.dto.BulkStatusResult;
 import com.storeops.activities.dto.CreateTaskRequest;
 import com.storeops.activities.dto.UpdateTaskRequest;
+import com.storeops.activities.model.AuditEntry;
 import com.storeops.activities.model.Task;
 import com.storeops.activities.model.TaskCategory;
 import com.storeops.activities.model.TaskPriority;
 import com.storeops.activities.model.TaskStatus;
+import com.storeops.activities.repository.AuditRepository;
 import com.storeops.activities.repository.TaskRepository;
 import com.storeops.shared.error.AppError;
 import com.storeops.shared.error.ConflictError;
@@ -34,15 +36,27 @@ import org.springframework.stereotype.Service;
 public class ActivityService {
 
     private static final int MAX_BULK_ITEMS = 50;
+    private static final int MAX_NOTE_LENGTH = 500;
 
     private final TaskRepository taskRepository;
     private final StaffService staffService;
     private final EventBus eventBus;
+    private final AuditRepository auditRepository;
 
-    public ActivityService(TaskRepository taskRepository, StaffService staffService, EventBus eventBus) {
+    public ActivityService(TaskRepository taskRepository, StaffService staffService, EventBus eventBus,
+                           AuditRepository auditRepository) {
         this.taskRepository = taskRepository;
         this.staffService = staffService;
         this.eventBus = eventBus;
+        this.auditRepository = auditRepository;
+    }
+
+    public List<AuditEntry> listAudit(AuthenticatedUser caller, String taskId) {
+        if (caller.role() != StaffRole.STORE_MANAGER) {
+            throw new ForbiddenError("Only a store manager can read the audit trail");
+        }
+        Task task = get(taskId);
+        return auditRepository.findByTaskId(task.id());
     }
 
     public List<Task> list(String programmeId, TaskStatus status) {
@@ -119,6 +133,9 @@ public class ActivityService {
             if (item == null || item.taskId() == null || item.taskId().isBlank() || item.status() == null) {
                 throw new ValidationError("Every update needs a taskId and a status");
             }
+            if (item.note() != null && item.note().length() > MAX_NOTE_LENGTH) {
+                throw new ValidationError("note must be at most " + MAX_NOTE_LENGTH + " characters");
+            }
             if (!seen.add(item.taskId())) {
                 throw new ValidationError("Duplicate taskId in updates: " + item.taskId());
             }
@@ -145,6 +162,8 @@ public class ActivityService {
             }
             Instant now = Instant.now();
             Task updated = taskRepository.save(existing.withChanges(item.status(), null, null, null, now));
+            auditRepository.save(new AuditEntry(UUID.randomUUID().toString(), updated.id(), caller.id(),
+                existing.status().name(), updated.status().name(), item.note(), now));
             eventBus.emit(new TaskStatusChangedEvent(updated.id(), updated.title(), updated.ownerId(), updated.assigneeId(),
                 existing.status().name(), updated.status().name(), now));
             return new BulkStatusResult(item.taskId(), true, updated.status().name(), null, null);

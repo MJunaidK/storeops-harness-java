@@ -4,6 +4,7 @@ import com.storeops.activities.dto.BulkStatusRequest;
 import com.storeops.activities.dto.BulkStatusResponse;
 import com.storeops.activities.dto.CreateTaskRequest;
 import com.storeops.activities.dto.UpdateTaskRequest;
+import com.storeops.activities.model.AuditEntry;
 import com.storeops.activities.model.Task;
 import com.storeops.activities.model.TaskStatus;
 import com.storeops.activities.service.ActivityService;
@@ -47,6 +48,11 @@ public class ActivityController {
     @GetMapping("/{id}")
     public Task get(AuthenticatedUser caller, @PathVariable String id) {
         return activityService.get(id);
+    }
+
+    @GetMapping("/{id}/audit")
+    public List<AuditEntry> listAudit(AuthenticatedUser caller, @PathVariable String id) {
+        return activityService.listAudit(caller, id);
     }
 
     @PatchMapping("/bulk-status")
