@@ -77,6 +77,7 @@ $RECYCLE.BIN/
 # ---------------------------------------------------------------
 # Harness
 # ---------------------------------------------------------------
-# Scratch output from Generator/Evaluator runs — not committed
-.harness/output/
+# Scratch output from Generator/Evaluator runs — not committed (archived copies live in .harness/reviews/)
+.harness/output/*
+!.harness/output/.gitkeep
 # NOTE: .harness/reviews/ is the committed audit trail — do NOT ignore it
