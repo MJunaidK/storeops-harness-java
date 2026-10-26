@@ -1,13 +1,14 @@
 # Sprint 2 contract: Whole-request validation and limits
 
-> **AMENDMENT 2026-10-24 (after Sprint 1 review)**
+> **AMENDMENT 2026-10-24 (after Sprint 1 review), updated 2026-10-26 (after Sprint 1 PASS)**
 >
 > - The service method is `updateStatusBulk`, not `bulkUpdateStatus` (the original name broke the D7
 >   write-prefix rule; see journal "Generator sprint 1, iteration 1").
 > - Sprint 1 placeholder behaviour is replaced in this sprint: TODO/IN_PROGRESS targets move from per-item
->   CONFLICT to whole-request VALIDATION_ERROR, and a null/empty `updates` list moves from 200 to 400.
-> - Allowed changes to existing tests: `ActivityServiceTest#bulkUpdateWithNullItemsListIsEmptyResponse` may be
->   rewritten to expect `ValidationError`. No other existing test may be changed.
+>   CONFLICT to whole-request VALIDATION_ERROR. A null or missing `updates` (left unspecified by Sprint 1) and an
+>   empty `updates` list (200 with zero counts in Sprint 1) must both give 400 VALIDATION_ERROR.
+> - No existing test may be changed. The Sprint 1 test for a null `updates` list was removed in Sprint 1
+>   iteration 2 (SC-2); Sprint 2 adds its own tests for null, missing and empty `updates`.
 
 Spec: .harness/output/spec.md (APPROVED) Decisions applied: DEC-2, DEC-3 (except `note`), DEC-8 (BLOCKED -> DONE)
 

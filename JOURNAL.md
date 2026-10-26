@@ -369,7 +369,7 @@
 - Approved each `./mvnw verify` prompt individually; did not use "don't ask again for ./mvnw verify \*"
   (the wildcard would also allow -DskipTests).
 
-  ### 2026-10-24 — Sprint 1 manual evaluation (before the Evaluator exists)
+### 2026-10-24 — Sprint 1 manual evaluation (before the Evaluator exists)
 
 - Re-ran `.\mvnw.cmd verify` myself: BUILD SUCCESS, 78 tests, Checkstyle 0, ArchUnit 7/7, SpotBugs 0, JaCoCo met.
   Generator's claim confirmed.
@@ -415,3 +415,23 @@
   of the iteration's work. `git diff --merge-base main` compares the working tree with the merge base: it
   sees uncommitted work and ignores later commits on `main`. Verified on `main`: it listed my uncommitted edits.
 - Lesson: before choosing a diff command, check where each agent leaves its work (committed or working tree).
+
+### 2026-10-25 — Sprint 1 iteration 2 via the orchestrator: PASS
+
+- First start ran in auto mode → aborted after ~3 min. The Generator had already edited exactly the two files
+  named in the feedback; partial edits discarded with `git restore src`. Lesson: check the permission mode first.
+- Restarted in manual mode. The orchestrator computed iteration 2 from the archives (ignored the `-LEAKED` file).
+- Generator 5m 52s: removed the scope-out test, the true-by-construction assertion and the null placeholder.
+  Ran `./mvnw verify` without pipes (generator.agent.md fix from iteration 1 held).
+- Evaluator 12m 47s: first tried `./mvnw verify 2>&1 | grep … | head` chained with git commands. I rejected it;
+  without any extra message it re-ran `./mvnw verify` exactly as written. → A plain rejection works as feedback.
+- Verdict PASS, 77 tests (78 − removed test). The orchestrator archived, committed `d4faca9`
+  ("sprint-1 iter-2: PASS") and merged to main with `--no-ff` (`1b9e6d6`); no push; Monitor skipped (not built).
+- Orchestrator bundled verdict read, archive, commit, switch and merge into one command and piped the merge
+  through `tail`. No harm (main was contained in sprint-1, so no conflict was possible), but a conflict would have
+  been hidden. → CLAUDE.md git rules: one command per call, no pipes.
+- Pattern: Generator, Evaluator and orchestrator all reached for pipes. Instructions reduce it but don't stop it.
+  → Candidate improvement: deny rules in `.claude/settings.json` (tool-enforced, not instruction-enforced).
+- Evaluator note: `bulkUpdateToCurrentStatusIsConflictAndLeavesUpdatedAtUnchanged` no longer asserts `updatedAt`;
+  the name overstates the test. No check covers "test name matches assertions" — idea, not acted on.
+- 2026-10-26: Sprint 2 amendment updated after the PASS — the test-rewrite allowance removed (test no longer exists); null/missing/empty updates → 400; "no existing test may be changed" (D15: Sprint 1 tests are now protected).

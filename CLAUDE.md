@@ -14,6 +14,14 @@ Example: `@planner Add shift handover bulk update` (full prompt in `PROMPT.md`).
 The developer's only other inputs during a run are `APPROVED`, requested changes to the spec,
 and decisions on escalations.
 
+To continue a run in a new session (next sprint, or after an escalation decision):
+
+    Continue the harness run for Sprint <N>, following CLAUDE.md. Work out the iteration number from
+    .harness/reviews/ as described in "Routing", tell me in one line which iteration and branch you will
+    use, then run it without waiting for me. Stop when Sprint <N> reaches its final verdict or escalates.
+
+After an escalation the developer replies `RETRY`, `AMEND` (after editing the contract) or `STOP`.
+
 ## Agents
 
 Each agent runs as a Claude Code subagent with its own fresh context (D11). The definitions
@@ -21,12 +29,12 @@ live in `.harness/agents/`; `.claude/agents/<name>.md` are thin wrappers (frontm
 that tell the subagent to read and follow its definition. Start an agent by delegating to the
 subagent of that name and passing only the inputs listed below — never the conversation history.
 
-| Agent     | Definition                           | Input passed                                               | Produces                                                                            | Started when                                       |
-| --------- | ------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
-| planner   | `.harness/agents/planner.agent.md`   | feature prompt, or `APPROVED` / requested changes          | `.harness/output/spec.md` (run 1); `.harness/output/sprint-<N>-contract.md` (run 2) | `@planner` received; developer replies to the spec |
-| generator | `.harness/agents/generator.agent.md` | sprint number; previous `evaluator-feedback.md` on a retry | code and tests in `src/`, `.harness/output/generator-summary.md`                    | a sprint starts, or the Evaluator returned FAIL    |
-| evaluator | `.harness/agents/evaluator.agent.md` | sprint number                                              | `.harness/output/evaluator-feedback.md` (verdict PASS / CONDITIONAL PASS / FAIL)    | the Generator finished                             |
-| monitor   | `.harness/agents/monitor.agent.md`   | sprint number, iteration count, final verdict              | `.harness/reviews/sprint-<N>-run-log.md`                                            | a sprint reached its final verdict or escalated    |
+| Agent     | Definition                           | Input passed                                                                                      | Produces                                                                            | Started when                                       |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
+| planner   | `.harness/agents/planner.agent.md`   | feature prompt, or `APPROVED` / requested changes                                                 | `.harness/output/spec.md` (run 1); `.harness/output/sprint-<N>-contract.md` (run 2) | `@planner` received; developer replies to the spec |
+| generator | `.harness/agents/generator.agent.md` | sprint number `<N>`, iteration `<i>`; for `<i>` > 1 the instruction to read evaluator-feedback.md | code and tests in `src/`, `.harness/output/generator-summary.md`                    | a sprint starts, or the Evaluator returned FAIL    |
+| evaluator | `.harness/agents/evaluator.agent.md` | sprint number `<N>`, iteration `<i>`, diff base main                                              | `.harness/output/evaluator-feedback.md` (verdict PASS / CONDITIONAL PASS / FAIL)    | the Generator finished                             |
+| monitor   | `.harness/agents/monitor.agent.md`   | sprint number, iterations used, final verdict, escalation flag                                    | `.harness/reviews/sprint-<N>-run-log.md`                                            | a sprint reached its final verdict or escalated    |
 
 ## Sequence
 
@@ -44,7 +52,6 @@ subagent of that name and passing only the inputs listed below — never the con
    `git switch -c sprint-<N> main`. Then run iterations as described in "Routing" until the sprint is done or escalated.
 7. After the last sprint: tell the developer the run is complete, list the files in `.harness/reviews/`,
    and remind them to review `git log --oneline main` and push. The orchestrator never pushes.
-8. After the last sprint: tell the developer the run is complete and list the files in `.harness/reviews/`.
 
 Never start the Generator while `spec.md` does not begin with `STATUS: APPROVED`.
 
@@ -80,7 +87,7 @@ The maximum is 3.
 1. `git switch main`, then `git merge --no-ff sprint-<N> -m "merge sprint-<N>: <VERDICT>"`.
    On a conflict: `git merge --abort`, `git switch sprint-<N>`, escalate (E3).
 2. Start **monitor** with `<N>`, iterations used, final verdict, escalation flag `false`.
-   Commit its run log on `main`: `git commit -m "sprint-<N> run log"`.
+   Commit its run log on `main`: `git add .harness/reviews`, then `git commit -m "sprint-<N> run log"`.
 3. If another sprint follows: `git switch -c sprint-<N+1> main` and start its first iteration.
 
 ### Escalation
@@ -111,6 +118,9 @@ Triggers: **E1** the 3rd iteration ends in FAIL · **E2** the verdict line is in
 
 Allowed: `git status`, `diff`, `log`, `add`, `commit`, `switch`, `merge`, `merge --abort`.
 Never: `push`, `reset`, `rebase`, `--force`, deleting branches, or resolving a merge conflict yourself (D16).
+Run one git command per call, exactly as written: no pipes (`|`), no `2>&1`, no `&&` / `;` chains.
+A pipe hides git's exit status, so a failed merge can look like a success (2026-10-25: `git merge main | tail`).
+Read the result from the command's own output before taking the next step.
 
 ## Context strategy ← TODO
 
