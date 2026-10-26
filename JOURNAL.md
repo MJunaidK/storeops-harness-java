@@ -206,6 +206,20 @@
 - **Assumption:** The Evaluator writes the verdict line correctly almost every time, so E2 is rare. Contract
   amendments stay a developer action; the orchestrator never edits contracts.
 
+### D18 · 2026-10-26 — Monitor: archive-only, Haiku, fixed check→skill signal rules
+
+- **Decision:** The Monitor reads only the sprint's archives, usage-log and earlier run logs (no code), has no
+  Bash, runs on Haiku, and flags skill-file drift by fixed rules (S1 same check fails twice in a sprint, S2 a check
+  fails again across sprints, S3 3 iterations or escalation, S4 verdict re-run) mapped to the skill file that owns
+  the check. Durations and tokens come from the orchestrator; missing numbers are "n/r".
+- **Alternatives:** Sonnet (better prose, higher cost for a summarizing task); Monitor reads code (duplicates the
+  Evaluator); free-form trend notes (not comparable across sprints).
+- **Rationale:** The run log must be comparable sprint to sprint, so its signals follow rules, not judgement.
+  First per-agent model choice (D3 revisit): the Evaluator is the most expensive agent (47% of 24h usage), the
+  Monitor should be the cheapest.
+- **Assumption:** Haiku reliably fills a fixed table format from structured files. If run logs come out
+  incomplete or wrong, switch to Sonnet and record it.
+
 ## Observations & corrections log
 
 ### 2026-10-18 — Plan-stage corrections (before any code was written)
