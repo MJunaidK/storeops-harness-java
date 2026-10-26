@@ -20,6 +20,7 @@ import com.storeops.activities.model.TaskStatus;
 import com.storeops.activities.repository.TaskRepository;
 import com.storeops.shared.error.ForbiddenError;
 import com.storeops.shared.error.NotFoundError;
+import com.storeops.shared.error.ValidationError;
 import com.storeops.shared.event.EventBus;
 import com.storeops.shared.event.TaskCreatedEvent;
 import com.storeops.shared.event.TaskStatusChangedEvent;
@@ -27,6 +28,7 @@ import com.storeops.shared.security.AuthenticatedUser;
 import com.storeops.staff.model.StaffRole;
 import com.storeops.staff.service.StaffService;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -322,5 +324,106 @@ class ActivityServiceTest {
 
         assertThat(response.updatedCount()).isEqualTo(1);
         assertThat(response.results().get(0).status()).isEqualTo("DONE");
+    }
+
+    // AC-2.1
+    @Test
+    void bulkUpdateBlockedTaskToDoneSavesDoneAndEmitsOneEvent() {
+        when(taskRepository.findById("T-4")).thenReturn(Optional.of(bulkTask("T-4", "m1", "u1", TaskStatus.BLOCKED)));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER, bulk(new BulkStatusItem("T-4", TaskStatus.DONE)));
+
+        assertThat(response.updatedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isZero();
+        assertThat(response.results().get(0).taskId()).isEqualTo("T-4");
+        assertThat(response.results().get(0).success()).isTrue();
+        assertThat(response.results().get(0).status()).isEqualTo("DONE");
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(saved.capture());
+        assertThat(saved.getValue().id()).isEqualTo("T-4");
+        assertThat(saved.getValue().status()).isEqualTo(TaskStatus.DONE);
+        ArgumentCaptor<TaskStatusChangedEvent> events = ArgumentCaptor.forClass(TaskStatusChangedEvent.class);
+        verify(eventBus, times(1)).emit(events.capture());
+        assertThat(events.getValue().taskId()).isEqualTo("T-4");
+        assertThat(events.getValue().oldStatus()).isEqualTo("BLOCKED");
+        assertThat(events.getValue().newStatus()).isEqualTo("DONE");
+    }
+
+    private void assertRejectedWholeRequest(BulkStatusRequest request) {
+        assertThatThrownBy(() -> service.updateStatusBulk(MANAGER, request))
+            .isInstanceOf(ValidationError.class)
+            .satisfies(e -> assertThat(((ValidationError) e).getCode()).isEqualTo("VALIDATION_ERROR"))
+            .satisfies(e -> assertThat(e.getMessage()).isNotEmpty());
+        verify(taskRepository, never()).findById(any());
+        verify(taskRepository, never()).save(any());
+        verify(eventBus, never()).emit(any());
+    }
+
+    // AC-2.2
+    @Test
+    void bulkUpdateToInProgressRejectsWholeRequest() {
+        assertRejectedWholeRequest(bulk(new BulkStatusItem("T-1", TaskStatus.IN_PROGRESS)));
+    }
+
+    // AC-2.2
+    @Test
+    void bulkUpdateToTodoRejectsWholeRequest() {
+        assertRejectedWholeRequest(bulk(new BulkStatusItem("T-1", TaskStatus.TODO)));
+    }
+
+    // AC-2.2
+    @Test
+    void bulkUpdateWithOneDisallowedTargetRejectsValidItemsToo() {
+        assertRejectedWholeRequest(bulk(new BulkStatusItem("T-2", TaskStatus.DONE), new BulkStatusItem("T-1", TaskStatus.TODO)));
+    }
+
+    // AC-2.5
+    @Test
+    void bulkUpdateWithEmptyListRejectsWholeRequest() {
+        assertRejectedWholeRequest(new BulkStatusRequest(List.of()));
+    }
+
+    // AC-2.5
+    @Test
+    void bulkUpdateWithNullListRejectsWholeRequest() {
+        assertRejectedWholeRequest(new BulkStatusRequest(null));
+    }
+
+    private List<BulkStatusItem> distinctItems(int count) {
+        List<BulkStatusItem> items = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            items.add(new BulkStatusItem("T-" + i, TaskStatus.DONE));
+        }
+        return items;
+    }
+
+    // AC-2.5
+    @Test
+    void bulkUpdateWith51ItemsRejectsWholeRequest() {
+        assertRejectedWholeRequest(new BulkStatusRequest(distinctItems(51)));
+    }
+
+    // AC-2.5
+    @Test
+    void bulkUpdateWithExactly50ItemsIsAccepted() {
+        for (int i = 1; i <= 50; i++) {
+            when(taskRepository.findById("T-" + i)).thenReturn(Optional.of(bulkTask("T-" + i, "m1", "u1", TaskStatus.TODO)));
+        }
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BulkStatusResponse response = service.updateStatusBulk(MANAGER, new BulkStatusRequest(distinctItems(50)));
+
+        assertThat(response.updatedCount()).isEqualTo(50);
+        assertThat(response.failedCount()).isZero();
+        assertThat(response.results()).hasSize(50);
+        verify(taskRepository, times(50)).save(any(Task.class));
+        verify(eventBus, times(50)).emit(any(TaskStatusChangedEvent.class));
+    }
+
+    // AC-2.6
+    @Test
+    void bulkUpdateWithDuplicateTaskIdRejectsWholeRequest() {
+        assertRejectedWholeRequest(bulk(new BulkStatusItem("T-1", TaskStatus.DONE), new BulkStatusItem("T-1", TaskStatus.BLOCKED)));
     }
 }

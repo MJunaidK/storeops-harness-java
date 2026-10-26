@@ -15,6 +15,7 @@ import com.storeops.shared.error.AppError;
 import com.storeops.shared.error.ConflictError;
 import com.storeops.shared.error.ForbiddenError;
 import com.storeops.shared.error.NotFoundError;
+import com.storeops.shared.error.ValidationError;
 import com.storeops.shared.event.EventBus;
 import com.storeops.shared.event.TaskCreatedEvent;
 import com.storeops.shared.event.TaskStatusChangedEvent;
@@ -23,12 +24,16 @@ import com.storeops.staff.model.StaffRole;
 import com.storeops.staff.service.StaffService;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ActivityService {
+
+    private static final int MAX_BULK_ITEMS = 50;
 
     private final TaskRepository taskRepository;
     private final StaffService staffService;
@@ -88,6 +93,7 @@ public class ActivityService {
     }
 
     public BulkStatusResponse updateStatusBulk(AuthenticatedUser caller, BulkStatusRequest request) {
+        validateBulkRequest(request);
         List<BulkStatusResult> results = new ArrayList<>();
         int updated = 0;
         for (BulkStatusItem item : request.updates()) {
@@ -98,6 +104,28 @@ public class ActivityService {
             results.add(result);
         }
         return new BulkStatusResponse(updated, results.size() - updated, results);
+    }
+
+    private void validateBulkRequest(BulkStatusRequest request) {
+        List<BulkStatusItem> updates = request == null ? null : request.updates();
+        if (updates == null || updates.isEmpty()) {
+            throw new ValidationError("updates must contain between 1 and " + MAX_BULK_ITEMS + " items");
+        }
+        if (updates.size() > MAX_BULK_ITEMS) {
+            throw new ValidationError("updates must contain at most " + MAX_BULK_ITEMS + " items");
+        }
+        Set<String> seen = new HashSet<>();
+        for (BulkStatusItem item : updates) {
+            if (item == null || item.taskId() == null || item.taskId().isBlank() || item.status() == null) {
+                throw new ValidationError("Every update needs a taskId and a status");
+            }
+            if (!seen.add(item.taskId())) {
+                throw new ValidationError("Duplicate taskId in updates: " + item.taskId());
+            }
+            if (item.status() != TaskStatus.DONE && item.status() != TaskStatus.BLOCKED) {
+                throw new ValidationError("Target status must be DONE or BLOCKED, got " + item.status());
+            }
+        }
     }
 
     private BulkStatusResult updateOneStatus(AuthenticatedUser caller, BulkStatusItem item) {
