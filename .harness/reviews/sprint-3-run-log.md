@@ -5,18 +5,18 @@ Sources: .harness/reviews/sprint-3-iter-1-generator-summary.md, .harness/reviews
 
 ## Iterations
 
-| Iter | Verdict | Failed checks (ID, severity) | Scores Arch/Func/Qual/Total | Tests run | Generator / Evaluator time |
-| ---- | ------- | ---------------------------- | --------------------------- | --------- | -------------------------- |
+| Iter | Verdict | Failed checks (ID, severity) | Scores Arch/Func/Qual/Total | Tests run | Generator / Evaluator time              |
+| ---- | ------- | ---------------------------- | --------------------------- | --------- | --------------------------------------- |
 | 1    | PASS    | none                         | 100/100/100/100             | 114       | 3m 27s (207128 ms) / 3m 03s (183419 ms) |
 
 ## Cost
 
-| Iter | Agent     | Tokens | Duration                | Source (orchestrator / usage-log)                                              |
-| ---- | --------- | ------ | ----------------------- | ------------------------------------------------------------------------------ |
-| 1    | generator | 79486  | 3m 27s (207128 ms)      | orchestrator (tokens and duration as reported); usage-log has no sprint 3 row  |
-| 1    | evaluator | 53213  | 3m 03s (183419 ms)      | orchestrator (tokens and duration as reported); usage-log has no sprint 3 row  |
-| —    | planner   | n/r    | n/r                     | not reported to the orchestrator input for this run                            |
-| —    | monitor   | n/r    | n/r                     | not reported to the monitor input (this run)                                   |
+| Iter | Agent     | Tokens | Duration           | Source (orchestrator / usage-log)                                             |
+| ---- | --------- | ------ | ------------------ | ----------------------------------------------------------------------------- |
+| 1    | generator | 79486  | 3m 27s (207128 ms) | orchestrator (tokens and duration as reported); usage-log has no sprint 3 row |
+| 1    | evaluator | 53213  | 3m 03s (183419 ms) | orchestrator (tokens and duration as reported); usage-log has no sprint 3 row |
+| —    | planner   | n/r    | n/r                | not reported to the orchestrator input for this run                           |
+| —    | monitor   | n/r    | n/r                | not reported to the monitor input (this run)                                  |
 
 Estimated cost: 132,699 tokens (estimate: sum of the generator 79,486 and evaluator 53,213 tokens above; planner and monitor n/r); weekly-allowance change: n/r (usage-log has no sprint 3 rows at the time of this run).
 
@@ -38,3 +38,8 @@ none (S1: only one iteration; S2: no check failed in this sprint; S3: 1 iteratio
 
 ## Developer notes
 
+- Run in accept-edits mode; git add used named files (CLAUDE.md fix confirmed) — my uncommitted usage-log.md stayed out.
+- D15 effect: the Generator kept a 2-arg BulkStatusItem constructor so protected tests compile unchanged; no `-` lines in tests.
+- Evaluator evidence for AC-3.4 did not name the three roles or the "no audit data" assertion. Checked by hand:
+  ActivityControllerTest.java:489 loops over u-lead, u-associate, u-regional; lines 494–496 assert taskId,
+  oldStatus, newStatus do not exist. Code complete — only the evidence was thin.

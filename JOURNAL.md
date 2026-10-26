@@ -461,3 +461,13 @@
   fully applied. Watch in Sprint 3; tighten the rule if it repeats.
 - Disclosed open item: `isAllowedTransition` keeps a now-unreachable target check. No check covers dead
   branches (AR-2 covers dead throws only) — idea, not acted on.
+
+### 2026-10-26 — Sprint 3 via the orchestrator: PASS on iteration 1; demonstration run complete
+
+- Generator 3m 27s (79k tokens), Evaluator 3m 03s (53k), Monitor 22s (28k, Haiku). 114 tests, all scores 100.
+- Named-file `git add` worked (CLAUDE.md fix); my uncommitted usage-log.md stayed out of the commits.
+- D15 shaped the design: the Generator kept a 2-arg `BulkStatusItem` constructor rather than edit protected
+  tests (0 deletions in test files). The contract's wiring exception was not needed — still untested live.
+- Evaluator evidence thin again (TQ-4, SC-2 "none found"; AC-3.4 roles not named) — 2 sprints in a row.
+  The Monitor cannot see weak PASS evidence; its signals fire only on FAILs. → REFLECTION candidate.
+- Whole feature (3 sprints, 4 iterations): ≈ 4–5% of the weekly Pro allowance, ≈ $3.30 API-equivalent.
