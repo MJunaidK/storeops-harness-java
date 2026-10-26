@@ -13,14 +13,18 @@ Plan: Pro. Models: Sonnet for planner, generator, evaluator and the orchestrator
 | 2026-10-25 | 1      | 2    | generator | n/r                                                              | 5m 52s   | via orchestrator                                                                                                           |
 | 2026-10-25 | 1      | 2    | evaluator | n/r                                                              | 12m 47s  | includes waiting on manual approvals and one rejected command                                                              |
 | 2026-10-26 | 1      | –    | monitor   | ≈ 118k (11.4k in, 5.1k out, 72.9k cache read, 29.1k cache write) | 4m 54s   | Haiku; run by hand after the sprint; tokens from the /usage Haiku line ($0.0081); duration as reported to the orchestrator |
+| 2026-10-26 | 2      | 1    | generator | 63,040                                                           | 7m 23s   | via orchestrator; tokens as reported to the orchestrator                                                                   |
+| 2026-10-26 | 2      | 1    | evaluator | 48,104                                                           | 2m 30s   | own verify, clean build; no approval waits (accept-edits)                                                                  |
+| 2026-10-26 | 2      | –    | monitor   | n/r                                                              | 22s      | Haiku; run-log write auto-approved (accept-edits)                                                                          |
 
 ## Per run (from /usage)
 
-| Date       | Run                                   | Session % before → after                | Weekly % before → after                | Total cost (API equiv.)                                    | Wall time                        |
-| ---------- | ------------------------------------- | --------------------------------------- | -------------------------------------- | ---------------------------------------------------------- | -------------------------------- |
-| 2026-10-24 | Sprint 1 iter 1 (generator only)      | n/r → ≈ 7%                              | 21% → 22%                              | $0.86                                                      | ~20 min                          |
-| 2026-10-25 | Sprint 1 iter 2 (orchestrator)        | 15% → n/r (window reset before reading) | 28% → 30% (upper bound, includes chat) | $0.74 (session total, Sonnet; Haiku < $0.01)               | ≈ 45 min active (19:28–20:14)    |
-| 2026-10-26 | Sprint 1 monitor (Haiku, retroactive) | 8% → 11%                                | 30% → 31% (includes chat)              | $0.138 (monitor Haiku $0.008 + orchestrator Sonnet $0.130) | 36 min session (incl. approvals) |
+| Date       | Run                                       | Session % before → after                | Weekly % before → after                | Total cost (API equiv.)                                    | Wall time                        |
+| ---------- | ----------------------------------------- | --------------------------------------- | -------------------------------------- | ---------------------------------------------------------- | -------------------------------- |
+| 2026-10-24 | Sprint 1 iter 1 (generator only)          | n/r → ≈ 7%                              | 21% → 22%                              | $0.86                                                      | ~20 min                          |
+| 2026-10-25 | Sprint 1 iter 2 (orchestrator)            | 15% → n/r (window reset before reading) | 28% → 30% (upper bound, includes chat) | $0.74 (session total, Sonnet; Haiku < $0.01)               | ≈ 45 min active (19:28–20:14)    |
+| 2026-10-26 | Sprint 1 monitor (Haiku, retroactive)     | 8% → 11%                                | 30% → 31% (includes chat)              | $0.138 (monitor Haiku $0.008 + orchestrator Sonnet $0.130) | 36 min session (incl. approvals) |
+| 2026-10-26 | Sprint 2 (orchestrator, 1 iter + monitor) | 12% → <after>                           | 31% → <after>                          | <total cost>                                               | ≈ 30 min (11:40–12:09)           |
 
 Notes:
 
@@ -33,3 +37,7 @@ Notes:
   → The $0.74 for Sprint 1 iteration 2 is the full run cost, not a lower bound.
 - Orchestrator overhead: in the Monitor run, the orchestrator (Sonnet, mostly cache reads of its own context)
   cost ~16× the Monitor (Haiku). For small agents the orchestrator, not the agent, dominates the cost.
+- Monitor duration depends on approvals: Sprint 1 4m 54s (run-log write approved by hand), Sprint 2 22s
+  (accept-edits). The Sprint 1 figure is mostly waiting, not work.
+- Sprint 2 Evaluator 2m 30s vs 7–13 min in Sprint 1: clean build and no approval waits; the feedback still
+  quotes build lines and test names for each check.

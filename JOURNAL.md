@@ -449,3 +449,15 @@
 - Evaluator note: `bulkUpdateToCurrentStatusIsConflictAndLeavesUpdatedAtUnchanged` no longer asserts `updatedAt`;
   the name overstates the test. No check covers "test name matches assertions" — idea, not acted on.
 - 2026-10-26: Sprint 2 amendment updated after the PASS — the test-rewrite allowance removed (test no longer exists); null/missing/empty updates → 400; "no existing test may be changed" (D15: Sprint 1 tests are now protected).
+
+### 2026-10-26 — Sprint 2 via the orchestrator: PASS on iteration 1
+
+- Fully autonomous: branch, Generator (7m 23s, 63k tokens), Evaluator (2m 30s, 48k tokens), archive, commit,
+  merge (`--no-ff`), Monitor (22s, Haiku), run log commit, stop. 96 tests, all scores 100.
+- First sprint with protected tests (D15): GI-2 evidence "no `-` lines" — Sprint 1's tests untouched.
+- Orchestrator used the broad `git add .harness/reviews`: my CLAUDE.md edit for exact file names had not been
+  saved before the "adds exact files" commit. Harmless this time (nothing else in the folder); fixed now.
+- Evaluator evidence was thin on TQ-4 and SC-2 (result without saying what was checked) — evidence rule not
+  fully applied. Watch in Sprint 3; tighten the rule if it repeats.
+- Disclosed open item: `isAllowedTransition` keeps a now-unreachable target check. No check covers dead
+  branches (AR-2 covers dead throws only) — idea, not acted on.

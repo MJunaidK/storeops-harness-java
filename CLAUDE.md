@@ -18,7 +18,7 @@ To continue a run in a new session (next sprint, or after an escalation decision
 
     Continue the harness run for Sprint <N>, following CLAUDE.md. Work out the iteration number from
     .harness/reviews/ as described in "Routing", tell me in one line which iteration and branch you will
-    use, then run it without waiting for me. Stop when Sprint <N> reaches its final verdict or escalates.
+    use, then run it without waiting for me. When Sprint <N> reaches its final verdict, complete the "Sprint done" steps (merge, monitor, run log commit) or the escalation steps, then stop: do not create the next sprint branch or start the next sprint, and do not push.
 
 After an escalation the developer replies `RETRY`, `AMEND` (after editing the contract) or `STOP`.
 
@@ -70,7 +70,8 @@ The maximum is 3.
    (not a new iteration). If the line is still invalid, escalate (E2).
 5. Archive: copy `generator-summary.md` and `evaluator-feedback.md` to `.harness/reviews/` as
    `sprint-<N>-iter-<i>-generator-summary.md` and `sprint-<N>-iter-<i>-evaluator-feedback.md`.
-6. Commit on `sprint-<N>`: `git add src .harness/reviews`, then `git commit -m "sprint-<N> iter-<i>: <VERDICT>"`.
+6. Commit on `sprint-<N>`: `git add src .harness/reviews/sprint-<N>-iter-<i>-generator-summary.md .harness/reviews/sprint-<N>-iter-<i>-evaluator-feedback.md`,
+   then `git commit -m "sprint-<N> iter-<i>: <VERDICT>"`.
 7. Route by the table below.
 
 ### Routing
@@ -87,7 +88,7 @@ The maximum is 3.
 1. `git switch main`, then `git merge --no-ff sprint-<N> -m "merge sprint-<N>: <VERDICT>"`.
    On a conflict: `git merge --abort`, `git switch sprint-<N>`, escalate (E3).
 2. Start **monitor** with `<N>`, iterations used, final verdict, escalation flag `false`.
-   Commit its run log on `main`: `git add .harness/reviews`, then `git commit -m "sprint-<N> run log"`.
+   Commit its run log on `main`: `git add .harness/reviews/sprint-<N>-run-log.md`, then `git commit -m "sprint-<N> run log"`.
 3. If another sprint follows: `git switch -c sprint-<N+1> main` and start its first iteration.
 
 ### Escalation
@@ -110,7 +111,8 @@ Triggers: **E1** the 3rd iteration ends in FAIL · **E2** the verdict line is in
    - STOP: end the run; sprint-<N> stays unmerged
    ```
 
-2. Copy it to `.harness/reviews/sprint-<N>-escalation.md` and commit it on `sprint-<N>`.
+2. Copy it to `.harness/reviews/sprint-<N>-escalation.md`, then on `sprint-<N>`:
+   `git add .harness/reviews/sprint-<N>-escalation.md` and `git commit -m "sprint-<N> escalation"`.
 3. Start **monitor** with escalation flag `true`.
 4. Show the developer the trigger and the blocking findings, then wait for RETRY, AMEND or STOP. Never merge an escalated sprint.
 

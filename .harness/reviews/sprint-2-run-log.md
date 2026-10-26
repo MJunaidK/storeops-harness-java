@@ -11,11 +11,11 @@ Sources: .harness/reviews/sprint-2-iter-1-generator-summary.md, .harness/reviews
 
 ## Cost
 
-| Iter | Agent     | Tokens | Duration | Source (orchestrator / usage-log)                                                  |
-| ---- | --------- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| Iter | Agent     | Tokens | Duration           | Source (orchestrator / usage-log)                                             |
+| ---- | --------- | ------ | ------------------ | ----------------------------------------------------------------------------- |
 | 1    | generator | 63040  | 7m 23s (443138 ms) | orchestrator (tokens and duration as reported); usage-log has no sprint 2 row |
 | 1    | evaluator | 48104  | 2m 30s (150111 ms) | orchestrator (tokens and duration as reported); usage-log has no sprint 2 row |
-| —    | planner   | n/r    | n/r      | orchestrator (planner runs for this sprint reported as n/r)                        |
+| —    | planner   | n/r    | n/r                | orchestrator (planner runs for this sprint reported as n/r)                   |
 
 Estimated cost: 111144 tokens (estimate: sum of the generator and evaluator tokens above; planner and monitor n/r); weekly-allowance change: n/r (usage-log has no sprint 2 rows).
 
@@ -37,3 +37,6 @@ none (S1: no check failed in any iteration; S2: no check failed in this sprint; 
 
 ## Developer notes
 
+- Run in accept-edits mode: file writes auto-approved; every git and `./mvnw verify` command approved by hand.
+- The orchestrator's broad `git add .harness/reviews` (CLAUDE.md edit missed) picked up only this sprint's files.
+- Weekly-allowance change is n/r here by design: the Monitor runs before usage-log rows are filled; see usage-log.md.
