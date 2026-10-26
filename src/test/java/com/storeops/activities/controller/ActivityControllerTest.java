@@ -404,4 +404,137 @@ class ActivityControllerTest {
 
         assertRejected(t1, bulkPatch(MANAGER, item(t1, "DONE"), item(t1, "BLOCKED")), null);
     }
+
+    private static String itemWithNote(String taskId, String status, String note) {
+        return "{\"taskId\":\"" + taskId + "\",\"status\":\"" + status + "\",\"note\":\"" + note + "\"}";
+    }
+
+    private ResultActions auditGet(String userId, String taskId) throws Exception {
+        return mvc.perform(get("/api/activities/" + taskId + "/audit").header("X-User-Id", userId));
+    }
+
+    // AC-3.1
+    @Test
+    void auditListsOneEntryPerUpdatedTaskForManager() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", ",\"assigneeId\":\"" + ASSOCIATE + "\"");
+        String t2 = createTask(MANAGER, "p-" + UUID.randomUUID(), "Two", ",\"assigneeId\":\"" + ASSOCIATE + "\"");
+        mvc.perform(patch("/api/activities/" + t2).header("X-User-Id", MANAGER).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"status\":\"IN_PROGRESS\"}")).andExpect(status().isOk());
+
+        bulkPatch(ASSOCIATE, itemWithNote(t1, "DONE", "Finished on shift"), item(t2, "BLOCKED"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.updatedCount").value(2));
+
+        auditGet(MANAGER, t1)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].taskId").value(t1))
+            .andExpect(jsonPath("$[0].actorId").value(ASSOCIATE))
+            .andExpect(jsonPath("$[0].oldStatus").value("TODO"))
+            .andExpect(jsonPath("$[0].newStatus").value("DONE"))
+            .andExpect(jsonPath("$[0].note").value("Finished on shift"))
+            .andExpect(jsonPath("$[0].id").isNotEmpty())
+            .andExpect(jsonPath("$[0].occurredAt").isNotEmpty());
+        auditGet(MANAGER, t2)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].taskId").value(t2))
+            .andExpect(jsonPath("$[0].oldStatus").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$[0].newStatus").value("BLOCKED"))
+            .andExpect(jsonPath("$[0].note").value(nullValue()));
+    }
+
+    // AC-3.2
+    @Test
+    void auditIsEmptyAfterFailedItemsAndRejectedRequest() throws Exception {
+        String t1 = createTask(LEAD, "p-" + UUID.randomUUID(), "Lead task", ",\"assigneeId\":\"" + LEAD + "\"");
+        String t2 = createTask(MANAGER, "p-" + UUID.randomUUID(), "Done task", "");
+        bulkPatch(MANAGER, item(t2, "DONE")).andExpect(jsonPath("$.updatedCount").value(1));
+        auditGet(MANAGER, t2).andExpect(jsonPath("$", hasSize(1)));
+
+        bulkPatch(ASSOCIATE, item(t1, "DONE")).andExpect(jsonPath("$.results[0].errorCode").value("FORBIDDEN"));
+        bulkPatch(MANAGER, item(t2, "BLOCKED")).andExpect(jsonPath("$.results[0].errorCode").value("CONFLICT"));
+        rawBulkPatch("{\"updates\":[]}").andExpect(status().isBadRequest());
+
+        auditGet(MANAGER, t1).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+        auditGet(MANAGER, t2).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].newStatus").value("DONE"));
+    }
+
+    // AC-3.3
+    @Test
+    void auditEntriesAreListedOldestFirst() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        bulkPatch(MANAGER, item(t1, "BLOCKED")).andExpect(jsonPath("$.updatedCount").value(1));
+        bulkPatch(MANAGER, item(t1, "DONE")).andExpect(jsonPath("$.updatedCount").value(1));
+
+        auditGet(MANAGER, t1)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(2)))
+            .andExpect(jsonPath("$[0].oldStatus").value("TODO"))
+            .andExpect(jsonPath("$[0].newStatus").value("BLOCKED"))
+            .andExpect(jsonPath("$[0].actorId").value(MANAGER))
+            .andExpect(jsonPath("$[1].oldStatus").value("BLOCKED"))
+            .andExpect(jsonPath("$[1].newStatus").value("DONE"))
+            .andExpect(jsonPath("$[1].actorId").value(MANAGER));
+    }
+
+    // AC-3.4
+    @Test
+    void auditIsForbiddenForEveryRoleExceptStoreManager() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+        bulkPatch(MANAGER, item(t1, "DONE")).andExpect(jsonPath("$.updatedCount").value(1));
+
+        for (String user : new String[] {LEAD, ASSOCIATE, "u-regional"}) {
+            auditGet(user, t1)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.taskId").doesNotExist())
+                .andExpect(jsonPath("$.oldStatus").doesNotExist())
+                .andExpect(jsonPath("$.newStatus").doesNotExist());
+        }
+        auditGet(MANAGER, t1).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    // AC-3.4
+    @Test
+    void auditOfUnknownTaskByNonManagerIsForbiddenNotNotFound() throws Exception {
+        auditGet(ASSOCIATE, "T-404-" + UUID.randomUUID())
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    // AC-3.5
+    @Test
+    void auditOfMissingTaskIsNotFoundForManager() throws Exception {
+        auditGet(MANAGER, "T-404")
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            .andExpect(jsonPath("$.message").value("Task not found: T-404"));
+    }
+
+    // AC-3.6
+    @Test
+    void bulkStatusWithNoteOver500CharactersRejectsWholeRequest() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+
+        assertRejected(t1, bulkPatch(MANAGER, itemWithNote(t1, "DONE", "n".repeat(501))), null);
+        auditGet(MANAGER, t1).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    // AC-3.6
+    @Test
+    void bulkStatusWithNoteOfExactly500CharactersIsAccepted() throws Exception {
+        String t1 = createTask(MANAGER, "p-" + UUID.randomUUID(), "One", "");
+        String boundary = "n".repeat(500);
+
+        bulkPatch(MANAGER, itemWithNote(t1, "DONE", boundary))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.updatedCount").value(1));
+        auditGet(MANAGER, t1)
+            .andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].note").value(boundary));
+    }
 }
